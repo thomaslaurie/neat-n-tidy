@@ -1,14 +1,49 @@
 <!DOCTYPE html>
 <html>
 	<head>
+
 		<meta charset="UTF-8">
+		<link rel="stylesheet" href="main.css">
 		<title>Stroke Aggregator</title>
+
 	</head>
+
 	<body>
-		<h1>Stroke Aggregator</h1>
 
-		<button id="blah">Test</button>
+		<div class="grid-container">
+
+
+			<div class="grid-title">
+				<!––Heading––>
+				<h1>Stroke Aggregator</h1>
+			</div>
+
+			<div class="grid-drawingBoard">
+				<!––Script that generates stokes––>
+				<script src="main.js"></script>
+			</div>
+
+			<div class="grid-startButton">
+				<!––Start Button––>
+				<!––Currently, this button creates the random strokes
+					in the future, it will allow users to draw strokes––>
+				<button id="Start">Start</button>	
+			</div>
+
+			<div class="grid-cleanButton">
+				<!––Clean-up Button––>
+				<!––Currently, this button sorts the strokes via angular compatability
+					in the future, it will also sort strokes via relative proximity and combine stroke clusters––>
+				<button id="Clean">Clean</button>
+			</div>
+
+			<div class="grid-deleteButton">
+				<!––Delete Button––>
+				<!––This button deletes all the strokes and restarts the system––>
+				<button id="Delete">Delete</button>
+			</div>
+
+		</div>
+
 	</body>
-
-	<script src="main.js"></script>
 </html>
