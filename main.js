@@ -234,6 +234,7 @@ function deleteFunction() {
 }
 
 //L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
+//L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
 
 function getLocation(event){
 	// gets point in global SVG space //! might be an issue if the svg is scaled
@@ -246,11 +247,10 @@ function getLocation(event){
 	return p.matrixTransform(svg.getScreenCTM().inverse());
 }
 
-
 let hold = false;
 let tempLine = document.createElementNS(ns, 'line'); // default as line
 
-svg.addEventListener('mousedown', event => {
+function startLine(event) {
 	if (!hold) {
 		let p = getLocation(event);
 
@@ -267,8 +267,8 @@ svg.addEventListener('mousedown', event => {
 
 		hold = true;
 	}
-});
-svg.addEventListener('mousemove', event => {
+}
+function moveLine(event) {
 	if (hold) {
 		let p = getLocation(event);
 
@@ -277,8 +277,8 @@ svg.addEventListener('mousemove', event => {
 			y2: p.y,
 		});
 	}
-});
-svg.addEventListener('mouseup', event => {
+}
+function endLine(event) {
 	if (hold) {
 		let p = getLocation(event);
 
@@ -289,10 +289,25 @@ svg.addEventListener('mouseup', event => {
 
 		hold = false;
 	}
-});
-
-function test() {
-	console.log('i hear ya');
 }
 
-//L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
+svg.addEventListener('mousedown', event => {
+	startLine(event);
+});
+svg.addEventListener('mousemove', event => {
+	moveLine(event);
+});
+svg.addEventListener('mouseup', event => {
+	endLine(event);
+});
+
+svg.addEventListener('touchstart', event => {
+	startLine(event);
+	console.log('touch');
+});
+svg.addEventListener('touchmove', event => {
+	moveLine(event);
+});
+svg.addEventListener('touchmove', event => {
+	endLine(event);
+});
