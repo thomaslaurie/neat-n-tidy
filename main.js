@@ -199,13 +199,19 @@ function generateFunction() {
 		svg.appendChild(l);
 	}
 }
-
 function cleanFunction() {
 	let lines = svg.getElementsByTagName('line');
+
+	// convert
+	let lines2 = [];
 	for(let i = 0; i < lines.length; i++) {
-		for(let j = i + 1; j < lines.length; j++) {
+		lines2[i] = lineToPoints(lines[i]);
+	}
+
+	for(let i = 0; i < lines2.length; i++) {
+		for(let j = i + 1; j < lines2.length; j++) {
 			// for each unique pair of lines
-			let cl = createCommonLine(lines[i], lines[j]);
+			let cl = createCommonLine(lines2[i], lines2[j]);
 			let l = document.createElementNS(ns, 'line');
 			setAttributesNS(l, null, {
 				x1: cl[0].x,
@@ -218,7 +224,6 @@ function cleanFunction() {
 		}
 	}
 }
-
 function deleteFunction() {
 	// https://developer.mozilla.org/en-US/docs/Web/API/Node
 	//TODO only delete lines
@@ -229,7 +234,6 @@ function deleteFunction() {
 }
 
 //L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
-
 
 function getLocation(event){
 	// gets point in global SVG space //! might be an issue if the svg is scaled
