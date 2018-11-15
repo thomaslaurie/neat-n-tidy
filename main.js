@@ -79,7 +79,6 @@ function createRandomLines(n) {
 					stroke-width: 2;`,
 		});
 
-		console.log(getLength(a[i]));
 	}
 	return a;
 }
@@ -105,3 +104,7 @@ lines.forEach(item => {
 
 // button test
 document.getElementById('blah').setAttribute('onclick', "console.log('hello world')");
+
+//
+
+//L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
