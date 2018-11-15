@@ -186,7 +186,7 @@ function lineToPoints(line) {
 
 // buttons
 function generateFunction() {
-	for (let i = 0; i < 10; i++) {
+	for (let i = 0; i < 2; i++) {
 		let rl = createRandomLine();
 		let l = document.createElementNS(ns, 'line');
 		setAttributesNS(l, null, {
