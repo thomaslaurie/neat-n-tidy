@@ -180,7 +180,7 @@ for (let i = 0; i < 10; i++) {
 	});
 	svg.appendChild(l);
 
-	lines[i] = l;
+	lines[i] = rl;
 }
 for(let i = 0; i < lines.length; i++) {
 	for(let j = i + 1; j < lines.length; j++) {
