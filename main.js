@@ -1,5 +1,5 @@
 // constants
-const width = 500;
+const width = 1500;
 const height = 500;
 
 // util
@@ -14,17 +14,31 @@ function setAttributesNS(element, namespace, attributes) {
   }
 }
 
-// svg namespace
-let ns = 'http://www.w3.org/2000/svg';
+//L	https://www.sitepoint.com/dom-manipulation-vanilla-javascript-no-jquery/
 
-let svg = document.createElementNS(ns, 'svg'); //C svg requires a namespace via createElementNS(ns, ...)
-setAttributesNS(svg, null, { //C attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
+// svg
+let ns = 'http://www.w3.org/2000/svg'; // svg namespace
+let svg = document.createElementNS(ns, 'svg'); // svg requires a namespace via createElementNS(ns, ...)
+setAttributesNS(svg, null, { // attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
   width: width,
   height: height,
 });
+//document.getElementById("grid-drawing").appendChild(svg);
 document.body.appendChild(svg);
 
-/* Controller Example
+// border
+let b = document.createElementNS(ns, 'rect');
+setAttributesNS(b, null, {
+	x: 0,
+	y: 0,
+	width: width,
+	height: height,
+	class: 'border',
+});
+svg.appendChild(b);
+
+
+/* controller example
 	let c = document.createElementNS(ns, 'circle');
 	setAttributesNS(c, null, {
 		cx: 50,
@@ -64,26 +78,89 @@ document.body.appendChild(svg);
 	}
 */
 
-// random lines
-function createRandomLines(n) {
-	let a = [];
-	for(let i = 0; i < n; i++) {
-		a[i] = document.createElementNS(ns, 'line');
-		setAttributesNS(a[i], null, {
-			//C random from 0inclusive to 1exclusive * range +1, floored
-			x1: Math.floor(Math.random() * (width+1)),
-			y1: Math.floor(Math.random() * (height+1)),
-			x2: Math.floor(Math.random() * (width+1)),
-			y2: Math.floor(Math.random() * (height+1)),
-			style: `stroke: rgb(255,0,0);
-					stroke-width: 2;`,
-		});
+// creation
+function createRandomLine() {
+	// random float from 0-inclusive to 1-exclusive * range+1 then floored
+	let l = [
+		{
+			x: Math.floor(Math.random() * (width+1)),
+			y: Math.floor(Math.random() * (height+1)),
+		},
+		{
+			x: Math.floor(Math.random() * (width+1)),
+			y: Math.floor(Math.random() * (height+1)),
+		},
+	];
+	
+	/* testing
+		let ps = lineToPoints(a[i]);
+		console.log(ps);
 
+		let l = getLength(ps[0], ps[1]);
+		let v = getVector(ps[0], ps[1]);
+		let n = normalizeVector(v);
+		console.log(getLength({x: 0, y:0}, n));
+
+		if(i >=1) {
+		createCommonLine(lineToPoints(a[i-1]), lineToPoints(a[i]));
 	}
-	return a;
+	*/
+	return l;
+}
+function createCommonLine(l1, l2) {
+	// employ aggregate method
+	//TODO use study's actual method (section 5)
+
+	// temporary method (just for lines): simple end-point averaging
+
+	// existing order
+	l1e = getVector(l1[0], l1[1]);
+	l2e = getVector(l2[0], l2[1]);
+	// reversed order
+	l2r = getVector(l2[1], l2[0]);
+
+	// if angle between lines is smaller by switching the order of the points of one line
+	if (angleBetweenVectors(l1e, l2e) > angleBetweenVectors(l1e, l2r)) {
+		// reverse points of line 2
+		[l2[0], l2[1]] = [l2[1], l2[0]];
+	}
+
+	// average endpoints and create line
+	l3 = [
+		{x: (l1[0].x + l2[0].x) /2, y: (l1[0].y + l2[0].y) /2},
+		{x: (l1[1].x + l2[1].x) /2, y: (l1[1].y + l2[1].y) /2},
+	];
+	return l3;
 }
 
-function getLength(line) {
+// math
+function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
+	// length between two points
+	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
+}
+function getLength({x, y}) {
+	// length of hypotenuse of vector
+	return Math.pow(Math.pow(x, 2) + Math.pow(y, 2), 0.5);
+}
+function getVector({x: x1, y: y1}, {x: x2, y: y2}) {
+	// from point 1 to point 2
+	return {x: x2 - x1, y: y2 - y1};
+}
+function normalizeVector(v) {
+	// length will be 1
+	let m = getLength(v);
+	return {x: v.x/m, y: v.y/m};
+}
+function angleBetweenVectors(v1, v2) {
+	// smallest angle between vectors
+	let dot = (v1.x * v2.x) + (v1.y * v2.y);
+	let m1 = getLength(v1);
+	let m2 = getLength(v2);
+	return Math.acos(dot / (m1 * m2));
+}
+
+// backwards conversion
+function lineToPoints(line) {
 	let x1, y1, x2, y2;
 	try {
 		x1 = parseFloat(line.getAttributeNS(null, 'x1'));
@@ -92,19 +169,145 @@ function getLength(line) {
 		y2 = parseFloat(line.getAttributeNS(null, 'y2'));
 	} catch (e) {
 		console.error(e);
+		return [
+			{x: 0, y: 0},
+			{x: 0, y: 0},
+		];
 	}
-	
-	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
+
+	return [
+		{x: x1, y: y1},
+		{x: x2, y: y2},
+	];
 }
 
-let lines = createRandomLines(100);
-lines.forEach(item => {
-	svg.appendChild(item);
+
+// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
+
+// buttons
+function generateFunction() {
+	for (let i = 0; i < 2; i++) {
+		let rl = createRandomLine();
+		let l = document.createElementNS(ns, 'line');
+		setAttributesNS(l, null, {
+			x1: rl[0].x,
+			y1: rl[0].y,
+			x2: rl[1].x,
+			y2: rl[1].y,
+			class: 'lineA',
+		});
+		svg.appendChild(l);
+	}
+}
+function cleanFunction() {
+	let lines = svg.getElementsByTagName('line');
+
+	// convert
+	let lines2 = [];
+	for(let i = 0; i < lines.length; i++) {
+		lines2[i] = lineToPoints(lines[i]);
+	}
+
+	for(let i = 0; i < lines2.length; i++) {
+		for(let j = i + 1; j < lines2.length; j++) {
+			// for each unique pair of lines
+			let cl = createCommonLine(lines2[i], lines2[j]);
+			let l = document.createElementNS(ns, 'line');
+			setAttributesNS(l, null, {
+				x1: cl[0].x,
+				y1: cl[0].y,
+				x2: cl[1].x,
+				y2: cl[1].y,
+				class: 'lineB',
+			});
+			svg.appendChild(l);
+		}
+	}
+}
+function deleteFunction() {
+	// https://developer.mozilla.org/en-US/docs/Web/API/Node
+	//TODO only delete lines
+	let lines = svg.getElementsByTagName('line');
+	for (let i = lines.length - 1; i >= 0; i--) {
+		lines[i].remove();
+	}
+}
+
+//L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
+//L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
+
+function getLocation(event){
+	// gets point in global SVG space //! might be an issue if the svg is scaled
+
+	// create an 'SVGPoint'
+	let p = svg.createSVGPoint();
+	p.x = event.clientX;
+	p.y = event.clientY;
+	// use builtin matrix math
+	return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+let hold = false;
+let tempLine = document.createElementNS(ns, 'line'); // default as line
+
+function startLine(event) {
+	if (!hold) {
+		let p = getLocation(event);
+
+		// initialize and add point
+		tempLine = document.createElementNS(ns, 'line');
+		setAttributesNS(tempLine, null, {
+			x1: p.x,
+			y1: p.y,
+			x2: p.x,
+			y2: p.y,
+			class: 'lineA',
+		});
+		svg.appendChild(tempLine);
+
+		hold = true;
+	}
+}
+function moveLine(event) {
+	if (hold) {
+		let p = getLocation(event);
+
+		setAttributesNS(tempLine, null, {
+			x2: p.x,
+			y2: p.y,
+		});
+	}
+}
+function endLine(event) {
+	if (hold) {
+		let p = getLocation(event);
+
+		setAttributesNS(tempLine, null, {
+			x2: p.x,
+			y2: p.y,
+		});
+
+		hold = false;
+	}
+}
+
+svg.addEventListener('mousedown', event => {
+	startLine(event);
+});
+svg.addEventListener('mousemove', event => {
+	moveLine(event);
+});
+svg.addEventListener('mouseup', event => {
+	endLine(event);
 });
 
-// button test
-document.getElementById('blah').setAttribute('onclick', "console.log('hello world')");
-
-//
-
-//L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
+svg.addEventListener('touchstart', event => {
+	startLine(event);
+	console.log('touch');
+});
+svg.addEventListener('touchmove', event => {
+	moveLine(event);
+});
+svg.addEventListener('touchmove', event => {
+	endLine(event);
+});
