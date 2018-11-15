@@ -14,9 +14,8 @@ function setAttributesNS(element, namespace, attributes) {
   }
 }
 
-// svg namespace
-let ns = 'http://www.w3.org/2000/svg';
-
+// svg
+let ns = 'http://www.w3.org/2000/svg'; // svg namespace
 let svg = document.createElementNS(ns, 'svg'); //C svg requires a namespace via createElementNS(ns, ...)
 setAttributesNS(svg, null, { //C attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
   width: width,
@@ -24,7 +23,7 @@ setAttributesNS(svg, null, { //C attributes inherit namespace of tag, but themse
 });
 document.body.appendChild(svg);
 
-/* Controller Example
+/* controller example
 	let c = document.createElementNS(ns, 'circle');
 	setAttributesNS(c, null, {
 		cx: 50,
@@ -64,26 +63,84 @@ document.body.appendChild(svg);
 	}
 */
 
-// random lines
-function createRandomLines(n) {
-	let a = [];
-	for(let i = 0; i < n; i++) {
-		a[i] = document.createElementNS(ns, 'line');
-		setAttributesNS(a[i], null, {
-			//C random from 0inclusive to 1exclusive * range +1, floored
-			x1: Math.floor(Math.random() * (width+1)),
-			y1: Math.floor(Math.random() * (height+1)),
-			x2: Math.floor(Math.random() * (width+1)),
-			y2: Math.floor(Math.random() * (height+1)),
-			style: `stroke: rgb(255,0,0);
-					stroke-width: 2;`,
-		});
+// creation
+function createRandomLine() {
+	//C random from 0inclusive to 1exclusive * range +1, floored
+	let l = [
+		{
+			x: Math.floor(Math.random() * (width+1)),
+			y: Math.floor(Math.random() * (height+1)),
+		},
+		{
+			x: Math.floor(Math.random() * (width+1)),
+			y: Math.floor(Math.random() * (height+1)),
+		},
+	];
+	
+	/* testing
+		let ps = lineToPoints(a[i]);
+		console.log(ps);
 
+		let l = getLength(ps[0], ps[1]);
+		let v = getVector(ps[0], ps[1]);
+		let n = normalizeVector(v);
+		console.log(getLength({x: 0, y:0}, n));
+
+		if(i >=1) {
+		createCommonLine(lineToPoints(a[i-1]), lineToPoints(a[i]));
 	}
-	return a;
+	*/
+	return l;
+}
+function createCommonLine(l1, l2) {
+	// employ aggregate method
+	//TODO use study's actual method (section 5)
+
+	// simple point averaging
+	// forward topology
+	l1f = getVector(l1[0], l1[1]);
+	l2f = getVector(l2[0], l2[1]);
+	// reversed topology
+	l2r = getVector(l2[1], l2[0]);
+
+	// if angle between lines is broader by switching the order of the points of one line
+	if (angleBetweenVectors(l1f, l2f) > angleBetweenVectors(l1f, l2r)) {
+		// swap points 0 and 1 of line 2
+		[l2[0], l2[1]] = [l2[1], l2[0]];
+	}
+
+	// average and create
+	l3 = [
+		{x: (l1[0].x + l2[0].x) /2, y: (l1[0].y + l2[0].y) /2},
+		{x: (l1[1].x + l2[1].x) /2, y: (l1[1].y + l2[1].y) /2},
+	];
+	console.log('count');
+	return l3;
 }
 
-function getLength(line) {
+// math
+function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
+	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
+}
+function getLength({x, y}) {
+	return Math.pow(Math.pow(x, 2) + Math.pow(y, 2), 0.5);
+}
+function getVector({x: x1, y: y1}, {x: x2, y: y2}) {
+	return {x: x2 - x1, y: y2 - y1};
+}
+function normalizeVector(v) {
+	let m = getLength(v);
+	return {x: v.x/m, y: v.y/m};
+}
+function angleBetweenVectors(v1, v2) {
+	let dot = (v1.x * v2.x) + (v1.y * v2.y);
+	let m1 = getLength(v1);
+	let m2 = getLength(v2);
+	return Math.acos(dot / (m1 * m2));
+}
+
+// backwards conversion
+function lineToPoints(line) {
 	let x1, y1, x2, y2;
 	try {
 		x1 = parseFloat(line.getAttributeNS(null, 'x1'));
@@ -92,19 +149,53 @@ function getLength(line) {
 		y2 = parseFloat(line.getAttributeNS(null, 'y2'));
 	} catch (e) {
 		console.error(e);
+		return [
+			{x: 0, y: 0},
+			{x: 0, y: 0},
+		];
 	}
-	
-	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
+
+	return [
+		{x: x1, y: y1},
+		{x: x2, y: y2},
+	];
 }
 
-let lines = createRandomLines(100);
-lines.forEach(item => {
-	svg.appendChild(item);
-});
+// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
+let lines = [];
+for (let i = 0; i < 10; i++) {
+	let rl = createRandomLine();
+	let l = document.createElementNS(ns, 'line');
+	setAttributesNS(l, null, {
+		x1: rl[0].x,
+		y1: rl[0].y,
+		x2: rl[1].x,
+		y2: rl[1].y,
+		class: 'lineA',
+	});
+	svg.appendChild(l);
+
+	lines[i] = l;
+}
+for(let i = 0; i < lines.length; i++) {
+	for(let j = i + 1; j < lines.length; j++) {
+		let cl = createCommonLine(lines[i], lines[j]);
+		let l = document.createElementNS(ns, 'line');
+		setAttributesNS(l, null, {
+			x1: cl[0].x,
+			y1: cl[0].y,
+			x2: cl[1].x,
+			y2: cl[1].y,
+			class: 'lineB',
+		});
+		svg.appendChild(l);
+	}
+}
+
+
+
 
 // button test
 document.getElementById('blah').setAttribute('onclick', "console.log('hello world')");
-
-//
 
 //L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
