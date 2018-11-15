@@ -16,8 +16,8 @@ function setAttributesNS(element, namespace, attributes) {
 
 // svg
 let ns = 'http://www.w3.org/2000/svg'; // svg namespace
-let svg = document.createElementNS(ns, 'svg'); //C svg requires a namespace via createElementNS(ns, ...)
-setAttributesNS(svg, null, { //C attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
+let svg = document.createElementNS(ns, 'svg'); // svg requires a namespace via createElementNS(ns, ...)
+setAttributesNS(svg, null, { // attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
   width: width,
   height: height,
 });
@@ -65,7 +65,7 @@ document.body.appendChild(svg);
 
 // creation
 function createRandomLine() {
-	//C random from 0inclusive to 1exclusive * range +1, floored
+	// random float from 0-inclusive to 1-exclusive * range+1 then floored
 	let l = [
 		{
 			x: Math.floor(Math.random() * (width+1)),
@@ -96,43 +96,48 @@ function createCommonLine(l1, l2) {
 	// employ aggregate method
 	//TODO use study's actual method (section 5)
 
-	// simple point averaging
-	// forward topology
-	l1f = getVector(l1[0], l1[1]);
-	l2f = getVector(l2[0], l2[1]);
-	// reversed topology
+	// temporary method (just for lines): simple end-point averaging
+
+	// existing order
+	l1e = getVector(l1[0], l1[1]);
+	l2e = getVector(l2[0], l2[1]);
+	// reversed order
 	l2r = getVector(l2[1], l2[0]);
 
-	// if angle between lines is broader by switching the order of the points of one line
-	if (angleBetweenVectors(l1f, l2f) > angleBetweenVectors(l1f, l2r)) {
-		// swap points 0 and 1 of line 2
+	// if angle between lines is smaller by switching the order of the points of one line
+	if (angleBetweenVectors(l1e, l2e) > angleBetweenVectors(l1e, l2r)) {
+		// reverse points of line 2
 		[l2[0], l2[1]] = [l2[1], l2[0]];
 	}
 
-	// average and create
+	// average endpoints and create line
 	l3 = [
 		{x: (l1[0].x + l2[0].x) /2, y: (l1[0].y + l2[0].y) /2},
 		{x: (l1[1].x + l2[1].x) /2, y: (l1[1].y + l2[1].y) /2},
 	];
-	console.log('count');
 	return l3;
 }
 
 // math
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
+	// length between two points
 	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
 }
 function getLength({x, y}) {
+	// length of hypotenuse of vector
 	return Math.pow(Math.pow(x, 2) + Math.pow(y, 2), 0.5);
 }
 function getVector({x: x1, y: y1}, {x: x2, y: y2}) {
+	// from point 1 to point 2
 	return {x: x2 - x1, y: y2 - y1};
 }
 function normalizeVector(v) {
+	// length will be 1
 	let m = getLength(v);
 	return {x: v.x/m, y: v.y/m};
 }
 function angleBetweenVectors(v1, v2) {
+	// smallest angle between vectors
 	let dot = (v1.x * v2.x) + (v1.y * v2.y);
 	let m1 = getLength(v1);
 	let m2 = getLength(v2);
@@ -179,6 +184,7 @@ for (let i = 0; i < 10; i++) {
 }
 for(let i = 0; i < lines.length; i++) {
 	for(let j = i + 1; j < lines.length; j++) {
+		// for each unique pair of lines
 		let cl = createCommonLine(lines[i], lines[j]);
 		let l = document.createElementNS(ns, 'line');
 		setAttributesNS(l, null, {
