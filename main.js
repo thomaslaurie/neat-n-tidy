@@ -1,5 +1,5 @@
 // constants
-const width = 500;
+const width = 1500;
 const height = 500;
 
 // util
