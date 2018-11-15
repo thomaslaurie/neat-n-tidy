@@ -1,9 +1,8 @@
-console.log('break');
-
+// constants
 var width = 500;
 var height = 500;
 
-// set multple attributes
+// util
 function setAttributes(element, attributes) {
   for(var key in attributes) {
     element.setAttribute(key, attributes[key]);
@@ -37,26 +36,23 @@ setAttributes(input2, {
 form.appendChild(input1);
 form.appendChild(input2);
 
-
-
 // svg namespace
 var ns = 'http://www.w3.org/2000/svg';
-// svg requires a namespace via createElementNS(ns, ...)
-var svg = document.createElementNS(ns, 'svg');
-// attributes inherit namespace of tag, but themselves don't have namespaces (prefixes)
-setAttributesNS(svg, null, {
+
+var svg = document.createElementNS(ns, 'svg'); //C svg requires a namespace via createElementNS(ns, ...)
+setAttributesNS(svg, null, { //C attributes inherit namespace of tag, but themselves don't have namespaces (prefixes), therefore namespace is null
   width: width,
   height: height,
 });
 
-
 var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-c.setAttributeNS(null, 'cx', 50);
-c.setAttributeNS(null, 'cy', 50);
-c.setAttributeNS(null, 'r', 50);
-c.setAttributeNS(null, 'fill', 'red');
+setAttributesNS(c, null, {
+    cx: 50,
+    cy: 50,
+    r: 50,
+    fill: 'red',
+});
 svg.appendChild(c);
-
 
 // sliders
 var moveSlider = function(slider, direction) {
