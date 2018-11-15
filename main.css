@@ -1,45 +1,15 @@
-.lineA {
-    stroke: rgb(255, 0, 0);
-	stroke-width: 2;
-}
-.lineB {
-    stroke: rgb(0, 0, 255);
-	stroke-width: 2;
-}
-
+/* general */
 html {
-
 	background-color: #e8c981;
-
 }
-
-.grid-container{
-	display: grid;
-	grid-template-columns: 9vw 9vw 9vw;
-	grid-template-rows: 10vw 2vw 1vw;
-	grid-gap: 1vw;
-	padding: 1vw;
-}
-
-.grid-title {
-	grid-column-start: 1;
-  	grid-column-end: 3;
-  	padding: 1vw;
-}
-
 
 h1 {
-
     font: normal normal 3vw Helvetica, sans-serif;
     color: #211f21;
     display: grid;
-
-
-
 }
 
 button {
-
 	background-color: #2f586e;
 	border: none;
 	color: #d1963a;
@@ -56,4 +26,38 @@ button:hover {
 	background-color: #d1963a;
     color: white;
 }
+
+/* container */
+.grid-container{
+	display: grid;
+	grid-template-columns: 9vw 9vw 9vw;
+	/* TODO change to vh */
+	grid-template-rows: 10vw 2vw 1vw;
+	grid-gap: 1vw;
+	padding: 1vw;
+}
+
+#grid-title {
+	grid-column-start: 1;
+  	grid-column-end: 3;
+  	padding: 1vw;
+}
+
+/* script */
+.lineA {
+    stroke: rgb(255, 0, 0);
+	stroke-width: 2;
+}
+.lineB {
+    stroke: rgb(0, 0, 255);
+	stroke-width: 2;
+}
+
+.border {
+	stroke: rgb(0, 0, 0);
+	stroke-width: 4;
+	fill: none;
+}
+
+
 

@@ -14,6 +14,8 @@ function setAttributesNS(element, namespace, attributes) {
   }
 }
 
+//L	https://www.sitepoint.com/dom-manipulation-vanilla-javascript-no-jquery/
+
 // svg
 let ns = 'http://www.w3.org/2000/svg'; // svg namespace
 let svg = document.createElementNS(ns, 'svg'); // svg requires a namespace via createElementNS(ns, ...)
@@ -21,7 +23,20 @@ setAttributesNS(svg, null, { // attributes inherit namespace of tag, but themsel
   width: width,
   height: height,
 });
+//document.getElementById("grid-drawing").appendChild(svg);
 document.body.appendChild(svg);
+
+// border
+let b = document.createElementNS(ns, 'rect');
+setAttributesNS(b, null, {
+	x: 0,
+	y: 0,
+	width: width,
+	height: height,
+	class: 'border',
+});
+svg.appendChild(b);
+
 
 /* controller example
 	let c = document.createElementNS(ns, 'circle');
@@ -166,42 +181,114 @@ function lineToPoints(line) {
 	];
 }
 
-// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
-let lines = [];
-for (let i = 0; i < 10; i++) {
-	let rl = createRandomLine();
-	let l = document.createElementNS(ns, 'line');
-	setAttributesNS(l, null, {
-		x1: rl[0].x,
-		y1: rl[0].y,
-		x2: rl[1].x,
-		y2: rl[1].y,
-		class: 'lineA',
-	});
-	svg.appendChild(l);
 
-	lines[i] = rl;
-}
-for(let i = 0; i < lines.length; i++) {
-	for(let j = i + 1; j < lines.length; j++) {
-		// for each unique pair of lines
-		let cl = createCommonLine(lines[i], lines[j]);
+// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
+
+// buttons
+function generateFunction() {
+	for (let i = 0; i < 10; i++) {
+		let rl = createRandomLine();
 		let l = document.createElementNS(ns, 'line');
 		setAttributesNS(l, null, {
-			x1: cl[0].x,
-			y1: cl[0].y,
-			x2: cl[1].x,
-			y2: cl[1].y,
-			class: 'lineB',
+			x1: rl[0].x,
+			y1: rl[0].y,
+			x2: rl[1].x,
+			y2: rl[1].y,
+			class: 'lineA',
 		});
 		svg.appendChild(l);
 	}
 }
 
+function cleanFunction() {
+	let lines = svg.getElementsByTagName('line');
+	for(let i = 0; i < lines.length; i++) {
+		for(let j = i + 1; j < lines.length; j++) {
+			// for each unique pair of lines
+			let cl = createCommonLine(lines[i], lines[j]);
+			let l = document.createElementNS(ns, 'line');
+			setAttributesNS(l, null, {
+				x1: cl[0].x,
+				y1: cl[0].y,
+				x2: cl[1].x,
+				y2: cl[1].y,
+				class: 'lineB',
+			});
+			svg.appendChild(l);
+		}
+	}
+}
+
+function deleteFunction() {
+	// https://developer.mozilla.org/en-US/docs/Web/API/Node
+	//TODO only delete lines
+	let lines = svg.getElementsByTagName('line');
+	for (let i = lines.length - 1; i >= 0; i--) {
+		lines[i].remove();
+	}
+}
+
+//L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
 
 
+function getLocation(event){
+	// gets point in global SVG space //! might be an issue if the svg is scaled
 
-// button test
-document.getElementById('blah').setAttribute('onclick', "console.log('hello world')");
+	// create an 'SVGPoint'
+	let p = svg.createSVGPoint();
+	p.x = event.clientX;
+	p.y = event.clientY;
+	// use builtin matrix math
+	return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+
+let hold = false;
+let tempLine = document.createElementNS(ns, 'line'); // default as line
+
+svg.addEventListener('mousedown', event => {
+	if (!hold) {
+		let p = getLocation(event);
+
+		// initialize and add point
+		tempLine = document.createElementNS(ns, 'line');
+		setAttributesNS(tempLine, null, {
+			x1: p.x,
+			y1: p.y,
+			x2: p.x,
+			y2: p.y,
+			class: 'lineA',
+		});
+		svg.appendChild(tempLine);
+
+		hold = true;
+	}
+});
+svg.addEventListener('mousemove', event => {
+	if (hold) {
+		let p = getLocation(event);
+
+		setAttributesNS(tempLine, null, {
+			x2: p.x,
+			y2: p.y,
+		});
+	}
+});
+svg.addEventListener('mouseup', event => {
+	if (hold) {
+		let p = getLocation(event);
+
+		setAttributesNS(tempLine, null, {
+			x2: p.x,
+			y2: p.y,
+		});
+
+		hold = false;
+	}
+});
+
+function test() {
+	console.log('i hear ya');
+}
 
 //L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
