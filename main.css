@@ -61,5 +61,10 @@ button:hover {
 	fill: none;
 }
 
+.fillA {
+	stroke: none;
+	fill: rgb(0, 255, 0);
+}
+
 
 

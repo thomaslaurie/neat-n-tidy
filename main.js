@@ -788,6 +788,8 @@ function fitPolyline(polyline, forgiveness) {
 }
 
 // math
+const estimateDivisions = 10;
+
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
 	// length between two points
 	return Math.pow(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2), 0.5);
@@ -812,8 +814,8 @@ function angleBetweenVectors(v1, v2) {
 	let m2 = getLength(v2);
 	return Math.acos(dot / (m1 * m2));
 }
-function pointAlongCubic(points, t) {
-	// points[0&3] are the anchor points, points[1&2] are the control points
+function pointAlongCubic(cubic, t) {
+	// cubic[0&3] are the anchor points, cubic[1&2] are the control points
 	// t is how far along the curve the point is 0-1
 	// equation is a cubic curve
 
@@ -829,24 +831,96 @@ function pointAlongCubic(points, t) {
 
 	// set default point
 	let p = {
-		x: points[0].x, 
-		y: points[0].y
+		x: cubic[0].x, 
+		y: cubic[0].y
 	};
 
 	// cubic function
 	p.x = 
-		1*Math.pow(ti, 3)*Math.pow(t, 0)*points[0].x + 
-		3*Math.pow(ti, 2)*Math.pow(t, 1)*points[1].x + 
-		3*Math.pow(ti, 1)*Math.pow(t, 2)*points[2].x + 
-		1*Math.pow(ti, 0)*Math.pow(t, 3)*points[3].x;
+		1*Math.pow(ti, 3)*Math.pow(t, 0)*cubic[0].x + 
+		3*Math.pow(ti, 2)*Math.pow(t, 1)*cubic[1].x + 
+		3*Math.pow(ti, 1)*Math.pow(t, 2)*cubic[2].x + 
+		1*Math.pow(ti, 0)*Math.pow(t, 3)*cubic[3].x;
 
 	p.y = 
-		1*Math.pow(ti, 3)*Math.pow(t, 0)*points[0].y + 
-		3*Math.pow(ti, 2)*Math.pow(t, 1)*points[1].y + 
-		3*Math.pow(ti, 1)*Math.pow(t, 2)*points[2].y + 
-		1*Math.pow(ti, 0)*Math.pow(t, 3)*points[3].y;
+		1*Math.pow(ti, 3)*Math.pow(t, 0)*cubic[0].y + 
+		3*Math.pow(ti, 2)*Math.pow(t, 1)*cubic[1].y + 
+		3*Math.pow(ti, 1)*Math.pow(t, 2)*cubic[2].y + 
+		1*Math.pow(ti, 0)*Math.pow(t, 3)*cubic[3].y;
 
 	return p;
+}
+function estimateCubicLength(cubic, divisions) {
+	// get dividing points
+	let dividingPoints = [];
+	for(let i = 0; i <= divisions; i++) {
+		dividingPoints.push(pointAlongCubic(cubic, i/divisions));
+	}
+
+	// sum division lengths
+	let length = 0;
+	for(let i = 1; i < dividingPoints.length; i++) {
+		length += getDistance(dividingPoints[i-1], dividingPoints[i]);
+	}
+	
+	return length;
+}
+function estimateFittedCurveLength(fittedCurve, divisions) {
+	let length = 0;
+	fittedCurve.forEach(curve => {
+		length += estimateCubicLength(curve, divisions);
+	});
+
+	return length;
+}
+function getFittedCurveDistributedPoints(fittedCurve, n) {
+	// get the lengths of each component cubic
+	let cubicLengths = [];
+	fittedCurve.forEach(cubic => {
+		cubicLengths.push(estimateCubicLength(cubic, estimateDivisions));
+	});
+	console.log('Cubic Lengths: ', cubicLengths);
+
+	// get the length of the entire fitted curve
+	let divisionLength = estimateFittedCurveLength(fittedCurve, estimateDivisions) / n;
+	console.log('Fitted Curve Length: ', estimateFittedCurveLength(fittedCurve, estimateDivisions));
+	console.log('Division Length: ', divisionLength);
+
+	// for each point
+	let points = [];
+	for (let i = 0; i < n; i++) {
+		// get the estimated point length
+		let pointLength = i * divisionLength;
+		console.log('Point Length: ', pointLength);
+
+		// find which cubic the point falls into
+		let respectiveCubic = 0;
+		let combinedLengths = 0;
+		for (let j = 0; j < cubicLengths.length; j++) {
+			combinedLengths += cubicLengths[j];
+			// if the combined lengths goes from less to more than the distance of the point
+			if (combinedLengths > pointLength) {
+				// set the respective cubic as this cubic, undo that last addition, and stop
+				respectiveCubic = j;
+				combinedLengths -= cubicLengths[j];
+				break;
+			}
+		}
+		
+		// find how far along the respectiveCubic the point is
+		let t = (pointLength - combinedLengths) / cubicLengths[respectiveCubic];
+		console.log('t: ', t);
+
+		// find the coordinates of this point
+		points.push(pointAlongCubic(fittedCurve[respectiveCubic], t));
+	}
+
+	// finally add the last point
+	let lastCubic = fittedCurve[fittedCurve.length-1];
+	let lastPoint = lastCubic[lastCubic.length-1];
+	points.push(lastPoint);
+
+	return points;
 }
 
 // backwards conversion
@@ -953,6 +1027,17 @@ function drawCubic([p1, p2, p3, p4]) {
 	svg.appendChild(temp);
 	return temp;
 }
+function drawDot(p) {
+	let temp = document.createElementNS(ns, 'circle');
+	setAttributesNS(temp, null, {
+		cx: p.x,
+		cy: p.y,
+		r: 10,
+		class: 'fillA',
+	});
+	svg.appendChild(temp);
+	return temp;
+}
 
 //L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
 //L https://www.sitepoint.com/how-to-translate-from-dom-to-svg-coordinates-and-back-again/
@@ -1031,9 +1116,16 @@ function endLine(event) {
 
 		//! temp draw fitted curve
 		let fittedCurve = fitPolyline(tempPolyline, 10);
-		fittedCurve.forEach(curve => {
-			drawCubic(curve);
+		fittedCurve.forEach(cubic => {
+			drawCubic(cubic);
 		});
+
+		let distributedPoints = getFittedCurveDistributedPoints(fittedCurve, 10);
+		console.log('Distributed Points: ', distributedPoints);
+		distributedPoints.forEach(point => {
+			drawDot(point);
+		});
+		
 
 
 		// store polyline (as svg cant do this) and reset it
