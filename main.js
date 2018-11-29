@@ -745,8 +745,7 @@ function createRandomLine() {
 function createCommonLine(l1, l2) {
 	// employ aggregate method
 	//TODO use study's actual method (section 5)
-
-	// temporary method (just for lines): simple end-point averaging
+	//! temporary method (just for lines): simple end-point averaging
 
 	// existing order
 	l1e = getVector(l1[0], l1[1]);
@@ -766,6 +765,28 @@ function createCommonLine(l1, l2) {
 		{x: (l1[1].x + l2[1].x) /2, y: (l1[1].y + l2[1].y) /2},
 	];
 	return l3;
+}
+function createCommonPolyline(pl1, pl2, n) {
+	//! still our own method, because the study's method is complicated af and we're running out of time
+
+	let fc1 = fitPolyline(pl1, fitForgiveness);
+	let fc2 = fitPolyline(pl2, fitForgiveness);
+
+	let dp1 = getDistributedPoints(fc1, n);
+	let dp2 = getDistributedPoints(fc2, n);
+
+	//TODO no direction correction yet
+
+	// average points
+	let dp3 = [];
+	for (let i = 0; i < dp1.length; i++) {
+		dp3[i] = {
+			x: (dp1[i].x + dp2[i].x) / 2,
+			y: (dp1[i].y + dp2[i].y) / 2,
+		};
+	}
+
+	return dp3;
 }
 function fitPolyline(polyline, forgiveness) {
 	// convert point objects to point arrays
@@ -788,6 +809,7 @@ function fitPolyline(polyline, forgiveness) {
 }
 
 // math
+const fitForgiveness = 5;
 const estimateDivisions = 10;
 
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
@@ -814,6 +836,7 @@ function angleBetweenVectors(v1, v2) {
 	let m2 = getLength(v2);
 	return Math.acos(dot / (m1 * m2));
 }
+
 function pointAlongCubic(cubic, t) {
 	// cubic[0&3] are the anchor points, cubic[1&2] are the control points
 	// t is how far along the curve the point is 0-1
@@ -873,7 +896,7 @@ function estimateFittedCurveLength(fittedCurve, divisions) {
 
 	return length;
 }
-function getFittedCurveDistributedPoints(fittedCurve, n) {
+function getDistributedPoints(fittedCurve, n) {
 	// get the lengths of each component cubic
 	let cubicLengths = [];
 	fittedCurve.forEach(cubic => {
@@ -945,9 +968,6 @@ function lineToPoints(line) {
 	];
 }
 
-
-// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
-
 // buttons
 function generateFunction() {
 	for (let i = 0; i < 2; i++) {
@@ -964,27 +984,63 @@ function generateFunction() {
 	}
 }
 function cleanFunction() {
-	let lines = svg.getElementsByTagName('line');
+	/*
+		let lines = svg.getElementsByTagName('line');
 
-	// convert
-	let lines2 = [];
-	for(let i = 0; i < lines.length; i++) {
-		lines2[i] = lineToPoints(lines[i]);
-	}
+		// convert
+		let lines2 = [];
+		for(let i = 0; i < lines.length; i++) {
+			lines2[i] = lineToPoints(lines[i]);
+		}
 
-	for(let i = 0; i < lines2.length; i++) {
-		for(let j = i + 1; j < lines2.length; j++) {
-			// for each unique pair of lines
-			let cl = createCommonLine(lines2[i], lines2[j]);
-			let l = document.createElementNS(ns, 'line');
-			setAttributesNS(l, null, {
-				x1: cl[0].x,
-				y1: cl[0].y,
-				x2: cl[1].x,
-				y2: cl[1].y,
-				class: 'lineB',
+		for(let i = 0; i < lines2.length; i++) {
+			for(let j = i + 1; j < lines2.length; j++) {
+				// for each unique pair of lines
+				let cl = createCommonLine(lines2[i], lines2[j]);
+				let l = document.createElementNS(ns, 'line');
+				setAttributesNS(l, null, {
+					x1: cl[0].x,
+					y1: cl[0].y,
+					x2: cl[1].x,
+					y2: cl[1].y,
+					class: 'lineB',
+				});
+				svg.appendChild(l);
+			}
+		}
+	*/
+
+	console.log('DrawnPolylines: ', drawnPolylines);
+
+	let polylineFittedCurves = [];
+	let polylineDistributedPoints = [];
+
+	drawnPolylines.forEach((polyline, i) => {
+		// create fitted curve
+		let fittedCurve = fitPolyline(polyline, 10);
+		polylineFittedCurves.push(fittedCurve);
+		fittedCurve.forEach(cubic => {
+			// store on first point (?)
+			cubic[0].cubic = drawCubic(cubic);
+		});
+
+		// create distributed points
+		let distributedPoints = getDistributedPoints(fittedCurve, 10);
+		polylineDistributedPoints.push(distributedPoints);
+		distributedPoints.forEach(point => {
+			drawDot(point);
+		});
+	});
+
+	let commonDistributedPoints = [];
+
+	for (let i = 0; i < drawnPolylines.length; i++) {
+		for (let j = i + 1; j < drawnPolylines.length; j++) {
+			let commonPolyline = createCommonPolyline(drawnPolylines[i], drawnPolylines[j], 10);
+			commonDistributedPoints.push(commonPolyline);
+			commonPolyline.forEach(point => {
+				drawDot(point);
 			});
-			svg.appendChild(l);
 		}
 	}
 }
@@ -999,6 +1055,11 @@ function deleteFunction() {
 	let paths = svg.getElementsByTagName('path');
 	for (let i = paths.length - 1; i >= 0; i--) {
 		paths[i].remove();
+	}
+
+	let circles = svg.getElementsByTagName('circle');
+	for (let i = circles.length - 1; i >= 0; i--) {
+		circles[i].remove();
 	}
 
 	// clear storage
@@ -1113,20 +1174,6 @@ function endLine(event) {
 		// stop interval and add final point
 		clearInterval(drawInterval);
 		endPolyline(tempPolyline, mousePosition);
-
-		//! temp draw fitted curve
-		let fittedCurve = fitPolyline(tempPolyline, 10);
-		fittedCurve.forEach(cubic => {
-			drawCubic(cubic);
-		});
-
-		let distributedPoints = getFittedCurveDistributedPoints(fittedCurve, 10);
-		console.log('Distributed Points: ', distributedPoints);
-		distributedPoints.forEach(point => {
-			drawDot(point);
-		});
-		
-
 
 		// store polyline (as svg cant do this) and reset it
 		drawnPolylines.push(tempPolyline);
