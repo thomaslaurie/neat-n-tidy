@@ -929,8 +929,6 @@ function coarseMerge(polylines) {
 
 			for (let j = i-1; j > -1; j--) {
 				// then iterate over all other ungrouped polylines, and if they satisfy the thresholds
-				console.log('Angular Compat: ', angularCompatibility(groups[i][0], instance[j]));
-				console.log('Distance: ', distanceBetweenPolylines(groups[i][0], instance[j]));
 				if (angularCompatibility(groups[i][0], instance[j]) < angularCompatibilityThreshold && distanceBetweenPolylines(groups[i][0], instance[j]) < distanceThreshold) {
 					// group them with that group
 					
@@ -956,7 +954,7 @@ const fitForgiveness = 5;
 const estimateDivisions = 10;
 
 const angularCompatibilityThreshold = 0.5;
-const distanceThreshold = 1000; // this is the big thing keeping it from working well - parallel but end-to-end lines are technically far apart which isnt right
+const distanceThreshold = 100; // this is the big thing keeping it from working well - parallel but end-to-end lines are technically far apart which isnt right
 
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
 	// length between two points
@@ -1176,7 +1174,7 @@ function cleanFunction() {
 	let aggregatedPolylines = coarseMerge(drawnPolylines);
 	aggregatedPolylines.forEach(polyline => {
 		let fittedCurve = fitPolyline(polyline, 10);
-		drawFittedCurve(fittedCurve, 'lineA');
+		drawFittedCurve(fittedCurve, 'lineB');
 	});
 	
 
