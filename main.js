@@ -1009,9 +1009,6 @@ function cleanFunction() {
 			}
 		}
 	*/
-
-	console.log('DrawnPolylines: ', drawnPolylines);
-
 	let polylineFittedCurves = [];
 	let polylineDistributedPoints = [];
 
@@ -1025,7 +1022,7 @@ function cleanFunction() {
 		});
 
 		// create distributed points
-		let distributedPoints = getDistributedPoints(fittedCurve, 10);
+		let distributedPoints = getDistributedPoints(fittedCurve, 100);
 		polylineDistributedPoints.push(distributedPoints);
 		distributedPoints.forEach(point => {
 			drawDot(point);
@@ -1036,7 +1033,7 @@ function cleanFunction() {
 
 	for (let i = 0; i < drawnPolylines.length; i++) {
 		for (let j = i + 1; j < drawnPolylines.length; j++) {
-			let commonPolyline = createCommonPolyline(drawnPolylines[i], drawnPolylines[j], 10);
+			let commonPolyline = createCommonPolyline(drawnPolylines[i], drawnPolylines[j], 100);
 			commonDistributedPoints.push(commonPolyline);
 			commonPolyline.forEach(point => {
 				drawDot(point);
