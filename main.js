@@ -732,34 +732,23 @@ let angularCompatibilityThreshold = 0.5;
 */
 
 // creation
-function createRandomLine() {
-	// random float from 0-inclusive to 1-exclusive * range+1 then floored
-	let l = [
-		{
-			x: Math.floor(Math.random() * (width+1)),
-			y: Math.floor(Math.random() * (height+1)),
-		},
-		{
-			x: Math.floor(Math.random() * (width+1)),
-			y: Math.floor(Math.random() * (height+1)),
-		},
-	];
-	
-	/* testing
-		let ps = lineToPoints(a[i]);
-		console.log(ps);
+/* old
+	function createRandomLine() {
+		// random float from 0-inclusive to 1-exclusive * range+1 then floored
+		let l = [
+			{
+				x: Math.floor(Math.random() * (width+1)),
+				y: Math.floor(Math.random() * (height+1)),
+			},
+			{
+				x: Math.floor(Math.random() * (width+1)),
+				y: Math.floor(Math.random() * (height+1)),
+			},
+		];
 
-		let l = getLength(ps[0], ps[1]);
-		let v = getVector(ps[0], ps[1]);
-		let n = normalizeVector(v);
-		console.log(getLength({x: 0, y:0}, n));
-
-		if(i >=1) {
-		createCommonLine(lineToPoints(a[i-1]), lineToPoints(a[i]));
+		return l;
 	}
-	*/
-	return l;
-}
+*/
 function createCommonLine(l1, l2) {
 	// employ aggregate method
 	//TODO use study's actual method (section 5)
