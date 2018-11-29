@@ -1,1 +1,1 @@
-# stroke-aggregator
+# neat n tidy
