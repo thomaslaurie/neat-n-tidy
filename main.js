@@ -766,27 +766,78 @@ function createCommonLine(l1, l2) {
 	];
 	return l3;
 }
-function createCommonPolyline(pl1, pl2, n) {
+function createCommonPolyline(polylines, n) {
 	//! still our own method, because the study's method is complicated af and we're running out of time
 
-	let fc1 = fitPolyline(pl1, fitForgiveness);
-	let fc2 = fitPolyline(pl2, fitForgiveness);
+	// orient all lines the same way (highest angular compatibility)
+	for (let i = 0; i < polylines.length; i++) {
+		// for each polyline, count if its angular compatibility is better if it's same or inverted orientation relative to all other lines (except itself, which is why sameCount starts at -1)
+		let sameCount = -1;
+		let invertCount = 0;
+		for (let j = 0; j < polylines.length; j++) {
+			if (angularCompatibility(polylines[i], polylines[j]) < angularCompatibility(polylines[i], polylines[j])) {
+				sameCount++;
+			} else {
+				invertCount++;
+			}
+			polylines[i].reverse();
+		}
 
-	let dp1 = getDistributedPoints(fc1, n);
-	let dp2 = getDistributedPoints(fc2, n);
-
-	//TODO no direction correction yet
-
-	// average points
-	let dp3 = [];
-	for (let i = 0; i < dp1.length; i++) {
-		dp3[i] = {
-			x: (dp1[i].x + dp2[i].x) / 2,
-			y: (dp1[i].y + dp2[i].y) / 2,
-		};
+		// if its mostly better when inverted, invert it
+		if (invertCount > sameCount) {
+			polylines[i].reverse();
+		}
 	}
 
-	return dp3;
+	let fittedCurves = [];
+	polylines.forEach((polyline, i) => {
+		fittedCurves[i] = fitPolyline(polyline, fitForgiveness);
+	});
+	
+	let distributedPointsList = [];
+	fittedCurves.forEach((fittedCurve, i) => {
+		distributedPointsList[i] = getDistributedPoints(fittedCurve, n);
+	});
+
+	/* old
+		// if angle between lines is smaller by switching the order of the points of one line
+		if (angularCompatibility(pl1, pl2) > angularCompatibility(pl1, pl2.reverse())) {
+			// reverse points of polyline 2
+			//! this is already reversed as part of the calculation
+		} else {
+			//! un-reverse it if its proper
+			pl2.reverse();
+		}
+
+		let fc1 = fitPolyline(pl1, fitForgiveness);
+		let fc2 = fitPolyline(pl2, fitForgiveness);
+
+		let dp1 = getDistributedPoints(fc1, n);
+		let dp2 = getDistributedPoints(fc2, n);
+		
+		// average points
+		let dp3 = [];
+		for (let i = 0; i < dp1.length; i++) {
+			dp3[i] = {
+				x: (dp1[i].x + dp2[i].x) / 2,
+				y: (dp1[i].y + dp2[i].y) / 2,
+			};
+		}
+	*/
+
+	let cdp = []; // common distributed points
+	for (let i = 0; i < n+1; i++) {
+		// average
+		cdp[i] = {x: 0, y: 0};
+		distributedPointsList.forEach(distributedPoints => {
+			cdp[i].x += distributedPoints[i].x;
+			cdp[i].y += distributedPoints[i].y;
+		});
+		cdp[i].x = cdp[i].x / distributedPointsList.length;
+		cdp[i].y = cdp[i].y / distributedPointsList.length;
+	}
+
+	return cdp;
 }
 function fitPolyline(polyline, forgiveness) {
 	// convert point objects to point arrays
@@ -807,10 +858,105 @@ function fitPolyline(polyline, forgiveness) {
 
 	return fittedCurve;
 }
+function averagePoints(points) {
+	let avg = {x: 0, y: 0};
+	for (let i = 0; i < points.length; i++) {
+		avg.x += points[i].x;
+		avg.y += points[i].y;
+	}
+
+	avg.x = avg.x / points.length;
+	avg.y = avg.y / points.length;
+
+	return avg;
+}
+function angularCompatibility(pl1, pl2) {
+	// get orientation of lines correct
+	let firstHalf1 = [];
+	let secondHalf1 = [];
+	for (let i = 0; i < pl1.length; i++) {
+		if (i < Math.ceil(pl1.length/2)) {
+			firstHalf1.push(pl1[i]);
+		} else {
+			secondHalf1.push(pl1[i]);
+		}
+	}
+	let firstPoint1 = averagePoints(firstHalf1);
+	let secondPoint1 = averagePoints(secondHalf1);
+	let l1e = getVector(firstPoint1, secondPoint1);
+	
+	let firstHalf2 = [];
+	let secondHalf2 = [];
+	for (let i = 0; i < pl2.length; i++) {
+		if (i < Math.ceil(pl2.length/2)) {
+			firstHalf2.push(pl2[i]);
+		} else {
+			secondHalf2.push(pl2[i]);
+		}
+	}
+	let firstPoint2 = averagePoints(firstHalf2);
+	let secondPoint2 = averagePoints(secondHalf2);
+	let l2e = getVector(firstPoint2, secondPoint2);
+
+	return angleBetweenVectors(l1e, l2e);
+}
+function distanceBetweenPolylines(pl1, pl2, detail) {
+	// re-analyze polylines to have same number of points
+	pl1 = getDistributedPoints(fitPolyline(pl1, fitForgiveness), detail);
+	pl2 = getDistributedPoints(fitPolyline(pl2, fitForgiveness), detail);
+
+	// get average distance
+	let sum = 0;
+	for(let i = 0; i < pl1.length; i++) {
+		sum += getDistance(pl1[i], pl2[i]);
+	}
+	return sum / pl1.length;
+}
+function coarseMerge(polylines) {
+	let instance = [];
+	for (let i = 0; i < polylines.length; i++) {
+		instance.push(polylines[i].slice(0));
+	}
+
+	let groups = [];
+
+	for (let i = instance.length-1; i > -1; i--) {
+		// for each polyline, that hasn't been grouped yet
+		if (instance[i] !== 'grouped') {
+			// create a new group (in groups) at i, containing polyline[i]
+			groups[i] = [instance[i].slice(0)];
+			instance[i] = 'grouped';
+
+			for (let j = i-1; j > -1; j--) {
+				// then iterate over all other ungrouped polylines, and if they satisfy the thresholds
+				console.log('Angular Compat: ', angularCompatibility(groups[i][0], instance[j]));
+				console.log('Distance: ', distanceBetweenPolylines(groups[i][0], instance[j]));
+				if (angularCompatibility(groups[i][0], instance[j]) < angularCompatibilityThreshold && distanceBetweenPolylines(groups[i][0], instance[j]) < distanceThreshold) {
+					// group them with that group
+					
+					groups[i].push(instance[j].slice(0));
+					instance[j] = 'grouped';
+				}
+			}
+		}
+	}
+
+	let newPolylines = [];
+	groups.forEach(item => {
+		if (Array.isArray(item)) {
+			newPolylines.push(createCommonPolyline(item, 50));
+		}
+	});
+
+	return newPolylines;;
+}
 
 // math
 const fitForgiveness = 5;
 const estimateDivisions = 10;
+
+const angularCompatibilityThreshold = 0.5;
+const distanceThreshold = 1000; // this is the big thing keeping it from working well - parallel but end-to-end lines are technically far apart which isnt right
 
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
 	// length between two points
@@ -835,6 +981,17 @@ function angleBetweenVectors(v1, v2) {
 	let m1 = getLength(v1);
 	let m2 = getLength(v2);
 	return Math.acos(dot / (m1 * m2));
+}
+function estimateTangent(polyline, index) {
+	// indexes of neighboring points
+	let before = index - 1;
+	let after = index + 1;
+
+	// clamp
+	if (before < 0) before = 0;
+	if (after > polyline.length-1) after = polyline.length-1;
+
+	return normalizeVector(getVector(polyline[index-1], polyline[index+1]));
 }
 
 function pointAlongCubic(cubic, t) {
@@ -902,19 +1059,15 @@ function getDistributedPoints(fittedCurve, n) {
 	fittedCurve.forEach(cubic => {
 		cubicLengths.push(estimateCubicLength(cubic, estimateDivisions));
 	});
-	console.log('Cubic Lengths: ', cubicLengths);
 
 	// get the length of the entire fitted curve
 	let divisionLength = estimateFittedCurveLength(fittedCurve, estimateDivisions) / n;
-	console.log('Fitted Curve Length: ', estimateFittedCurveLength(fittedCurve, estimateDivisions));
-	console.log('Division Length: ', divisionLength);
 
 	// for each point
 	let points = [];
 	for (let i = 0; i < n; i++) {
 		// get the estimated point length
 		let pointLength = i * divisionLength;
-		console.log('Point Length: ', pointLength);
 
 		// find which cubic the point falls into
 		let respectiveCubic = 0;
@@ -932,7 +1085,6 @@ function getDistributedPoints(fittedCurve, n) {
 		
 		// find how far along the respectiveCubic the point is
 		let t = (pointLength - combinedLengths) / cubicLengths[respectiveCubic];
-		console.log('t: ', t);
 
 		// find the coordinates of this point
 		points.push(pointAlongCubic(fittedCurve[respectiveCubic], t));
@@ -984,7 +1136,7 @@ function generateFunction() {
 	}
 }
 function cleanFunction() {
-	/*
+	/* old
 		let lines = svg.getElementsByTagName('line');
 
 		// convert
@@ -1009,37 +1161,38 @@ function cleanFunction() {
 			}
 		}
 	*/
-	let polylineFittedCurves = [];
-	let polylineDistributedPoints = [];
 
 	drawnPolylines.forEach((polyline, i) => {
-		// create fitted curve
 		let fittedCurve = fitPolyline(polyline, 10);
-		polylineFittedCurves.push(fittedCurve);
-		fittedCurve.forEach(cubic => {
-			// store on first point (?)
-			cubic[0].cubic = drawCubic(cubic);
-		});
+		drawFittedCurve(fittedCurve, 'lineA');
 
-		// create distributed points
-		let distributedPoints = getDistributedPoints(fittedCurve, 100);
-		polylineDistributedPoints.push(distributedPoints);
-		distributedPoints.forEach(point => {
-			drawDot(point);
-		});
+		/* create distributed points
+			let distributedPoints = getDistributedPoints(fittedCurve, 100);
+			drawDistributedPoints(distributedPoints, 'fillA');
+		*/
 	});
 
-	let commonDistributedPoints = [];
+	
+	let aggregatedPolylines = coarseMerge(drawnPolylines);
+	aggregatedPolylines.forEach(polyline => {
+		let fittedCurve = fitPolyline(polyline, 10);
+		drawFittedCurve(fittedCurve, 'lineA');
+	});
+	
 
-	for (let i = 0; i < drawnPolylines.length; i++) {
-		for (let j = i + 1; j < drawnPolylines.length; j++) {
-			let commonPolyline = createCommonPolyline(drawnPolylines[i], drawnPolylines[j], 100);
-			commonDistributedPoints.push(commonPolyline);
-			commonPolyline.forEach(point => {
-				drawDot(point);
-			});
+	/* old
+		let commonDistributedPoints = [];
+
+		for (let i = 0; i < drawnPolylines.length; i++) {
+			for (let j = i + 1; j < drawnPolylines.length; j++) {
+				let commonPolyline = createCommonPolyline([drawnPolylines[i], drawnPolylines[j]], 100);
+				commonDistributedPoints.push(commonPolyline);
+				commonPolyline.forEach(point => {
+					drawDot(point, 'fillA');
+				});
+			}
 		}
-	}
+	*/
 }
 function deleteFunction() {
 	// https://developer.mozilla.org/en-US/docs/Web/API/Node
@@ -1064,37 +1217,48 @@ function deleteFunction() {
 }
 
 // draw functions
-function drawLine([p1, p2]) {
+function drawLine([p1, p2], style) {
 	let temp = document.createElementNS(ns, 'line');
 	setAttributesNS(temp, null, {
 		x1: p1.x,
 		y1: p1.y,
 		x2: p2.x,
 		y2: p2.y,
-		class: 'lineA',
+		class: style,
 	});
 	svg.appendChild(temp);
 	return temp;
 }
-function drawCubic([p1, p2, p3, p4]) {
+function drawCubic([p1, p2, p3, p4], style) {
 	let temp = document.createElementNS(ns, 'path');
 	setAttributesNS(temp, null, {
 		d: `M ${p1.x} ${p1.y} C ${p2.x} ${p2.y}, ${p3.x} ${p3.y}, ${p4.x} ${p4.y}`,
-		class: 'lineB',
+		class: style,
 	});
 	svg.appendChild(temp);
 	return temp;
 }
-function drawDot(p) {
+function drawFittedCurve(fittedCurve, style) {
+	fittedCurve.forEach(cubic => {
+		// store on first point (?)
+		cubic[0].cubic = drawCubic(cubic, style);
+	});
+}
+function drawDot(p, style) {
 	let temp = document.createElementNS(ns, 'circle');
 	setAttributesNS(temp, null, {
 		cx: p.x,
 		cy: p.y,
 		r: 10,
-		class: 'fillA',
+		class: style,
 	});
 	svg.appendChild(temp);
 	return temp;
+}
+function drawDistributedPoints(distributedPoints, style) {
+	distributedPoints.forEach(point => {
+		drawDot(point, style);
+	});
 }
 
 //L mouseevent https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
@@ -1136,7 +1300,7 @@ function addPolylinePoint(polyline, point) {
 			x: mousePosition.x,
 			y: mousePosition.y,
 		},
-	]);
+	], 'lineA');
 
 	// also store it
 	//! lines are stored in each point? (except the first) (each line is only stored once though)
