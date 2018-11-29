@@ -47,10 +47,12 @@ button:hover {
 .lineA {
     stroke: rgb(255, 0, 0);
 	stroke-width: 2;
+	fill: none;
 }
 .lineB {
     stroke: rgb(0, 0, 255);
 	stroke-width: 2;
+	fill: none;
 }
 
 .border {

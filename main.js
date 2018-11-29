@@ -1,395 +1,637 @@
 // imports (hacky)
 
-//L regression-js: https://github.com/Tom-Alexander/regression-js
-let regression = {};
+//L fit-curve: https://github.com/soswow/fit-curve
+let fit;
 (function (global, factory) {
-	if (typeof define === "function" && define.amd) {
-		define(['module'], factory);
-	} else if (typeof exports !== "undefined") {
-		factory(module);
-	} else {
-		var mod = {
-		exports: {}
-		};
-		factory(mod);
-		global.regression = mod.exports;
-	}
+    if (typeof define === "function" && define.amd) {
+        define(['module'], factory);
+    } else if (typeof exports !== "undefined") {
+        factory(module);
+    } else {
+        var mod = {
+            exports: {}
+        };
+        factory(mod);
+        global.fitCurve = mod.exports;
+    }
 })(this, function (module) {
-	'use strict';
+    'use strict';
 
-	function _defineProperty(obj, key, value) {
-		if (key in obj) {
-		Object.defineProperty(obj, key, {
-			value: value,
-			enumerable: true,
-			configurable: true,
-			writable: true
-		});
-		} else {
-		obj[key] = value;
-		}
+    function _classCallCheck(instance, Constructor) {
+        if (!(instance instanceof Constructor)) {
+            throw new TypeError("Cannot call a class as a function");
+        }
+    }
 
-		return obj;
-	}
+    // ==ClosureCompiler==
+    // @output_file_name fit-curve.min.js
+    // @compilation_level SIMPLE_OPTIMIZATIONS
+    // ==/ClosureCompiler==
 
-	var _extends = Object.assign || function (target) {
-		for (var i = 1; i < arguments.length; i++) {
-		var source = arguments[i];
+    /**
+     *  @preserve  JavaScript implementation of
+     *  Algorithm for Automatically Fitting Digitized Curves
+     *  by Philip J. Schneider
+     *  "Graphics Gems", Academic Press, 1990
+     *
+     *  The MIT License (MIT)
+     *
+     *  https://github.com/soswow/fit-curves
+     */
 
-		for (var key in source) {
-			if (Object.prototype.hasOwnProperty.call(source, key)) {
-			target[key] = source[key];
-			}
-		}
-		}
+    /**
+     * Fit one or more Bezier curves to a set of points.
+     *
+     * @param {Array<Array<Number>>} points - Array of digitized points, e.g. [[5,5],[5,50],[110,140],[210,160],[320,110]]
+     * @param {Number} maxError - Tolerance, squared error between points and fitted curve
+     * @returns {Array<Array<Array<Number>>>} Array of Bezier curves, where each element is [first-point, control-point-1, control-point-2, second-point] and points are [x, y]
+     */
+    function fitCurve(points, maxError, progressCallback) {
+        if (!Array.isArray(points)) {
+            throw new TypeError("First argument should be an array");
+        }
+        points.forEach(function (point) {
+            if (!Array.isArray(point) || point.length !== 2 || typeof point[0] !== 'number' || typeof point[1] !== 'number') {
+                throw Error("Each point should be an array of two numbers");
+            }
+        });
+        // Remove duplicate points
+        points = points.filter(function (point, i) {
+            return i === 0 || !(point[0] === points[i - 1][0] && point[1] === points[i - 1][1]);
+        });
 
-		return target;
-	};
+        if (points.length < 2) {
+            return [];
+        }
 
-	function _toConsumableArray(arr) {
-		if (Array.isArray(arr)) {
-		for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) {
-			arr2[i] = arr[i];
-		}
+        var len = points.length;
+        var leftTangent = createTangent(points[1], points[0]);
+        var rightTangent = createTangent(points[len - 2], points[len - 1]);
 
-		return arr2;
-		} else {
-		return Array.from(arr);
-		}
-	}
+        return fitCubic(points, leftTangent, rightTangent, maxError, progressCallback);
+    }
 
-	var DEFAULT_OPTIONS = { order: 2, precision: 2, period: null };
+    /**
+     * Fit a Bezier curve to a (sub)set of digitized points.
+     * Your code should not call this function directly. Use {@link fitCurve} instead.
+     *
+     * @param {Array<Array<Number>>} points - Array of digitized points, e.g. [[5,5],[5,50],[110,140],[210,160],[320,110]]
+     * @param {Array<Number>} leftTangent - Unit tangent vector at start point
+     * @param {Array<Number>} rightTangent - Unit tangent vector at end point
+     * @param {Number} error - Tolerance, squared error between points and fitted curve
+     * @returns {Array<Array<Array<Number>>>} Array of Bezier curves, where each element is [first-point, control-point-1, control-point-2, second-point] and points are [x, y]
+     */
+    function fitCubic(points, leftTangent, rightTangent, error, progressCallback) {
+        var MaxIterations = 20; //Max times to try iterating (to find an acceptable curve)
 
-	/**
-	* Determine the coefficient of determination (r^2) of a fit from the observations
-	* and predictions.
-	*
-	* @param {Array<Array<number>>} data - Pairs of observed x-y values
-	* @param {Array<Array<number>>} results - Pairs of observed predicted x-y values
-	*
-	* @return {number} - The r^2 value, or NaN if one cannot be calculated.
-	*/
-	function determinationCoefficient(data, results) {
-		var predictions = [];
-		var observations = [];
+        var bezCurve, //Control points of fitted Bezier curve
+        u, //Parameter values for point
+        uPrime, //Improved parameter values
+        maxError, prevErr, //Maximum fitting error
+        splitPoint, prevSplit, //Point to split point set at if we need more than one curve
+        centerVector, toCenterTangent, fromCenterTangent, //Unit tangent vector(s) at splitPoint
+        beziers, //Array of fitted Bezier curves if we need more than one curve
+        dist, i;
 
-		data.forEach(function (d, i) {
-		if (d[1] !== null) {
-			observations.push(d);
-			predictions.push(results[i]);
-		}
-		});
+        //console.log('fitCubic, ', points.length);
 
-		var sum = observations.reduce(function (a, observation) {
-		return a + observation[1];
-		}, 0);
-		var mean = sum / observations.length;
+        //Use heuristic if region only has two points in it
+        if (points.length === 2) {
+            dist = maths.vectorLen(maths.subtract(points[0], points[1])) / 3.0;
+            bezCurve = [points[0], maths.addArrays(points[0], maths.mulItems(leftTangent, dist)), maths.addArrays(points[1], maths.mulItems(rightTangent, dist)), points[1]];
+            return [bezCurve];
+        }
 
-		var ssyy = observations.reduce(function (a, observation) {
-		var difference = observation[1] - mean;
-		return a + difference * difference;
-		}, 0);
+        //Parameterize points, and attempt to fit curve
+        u = chordLengthParameterize(points);
 
-		var sse = observations.reduce(function (accum, observation, index) {
-		var prediction = predictions[index];
-		var residual = observation[1] - prediction[1];
-		return accum + residual * residual;
-		}, 0);
+        var _generateAndReport = generateAndReport(points, u, u, leftTangent, rightTangent, progressCallback);
 
-		return 1 - sse / ssyy;
-	}
+        bezCurve = _generateAndReport[0];
+        maxError = _generateAndReport[1];
+        splitPoint = _generateAndReport[2];
 
-	/**
-	* Determine the solution of a system of linear equations A * x = b using
-	* Gaussian elimination.
-	*
-	* @param {Array<Array<number>>} input - A 2-d matrix of data in row-major form [ A | b ]
-	* @param {number} order - How many degrees to solve for
-	*
-	* @return {Array<number>} - Vector of normalized solution coefficients matrix (x)
-	*/
-	function gaussianElimination(input, order) {
-		var matrix = input;
-		var n = input.length - 1;
-		var coefficients = [order];
 
-		for (var i = 0; i < n; i++) {
-		var maxrow = i;
-		for (var j = i + 1; j < n; j++) {
-			if (Math.abs(matrix[i][j]) > Math.abs(matrix[i][maxrow])) {
-			maxrow = j;
-			}
-		}
+        if (maxError < error) {
+            return [bezCurve];
+        }
+        //If error not too large, try some reparameterization and iteration
+        if (maxError < error * error) {
 
-		for (var k = i; k < n + 1; k++) {
-			var tmp = matrix[k][i];
-			matrix[k][i] = matrix[k][maxrow];
-			matrix[k][maxrow] = tmp;
-		}
+            uPrime = u;
+            prevErr = maxError;
+            prevSplit = splitPoint;
 
-		for (var _j = i + 1; _j < n; _j++) {
-			for (var _k = n; _k >= i; _k--) {
-			matrix[_k][_j] -= matrix[_k][i] * matrix[i][_j] / matrix[i][i];
-			}
-		}
-		}
+            for (i = 0; i < MaxIterations; i++) {
 
-		for (var _j2 = n - 1; _j2 >= 0; _j2--) {
-		var total = 0;
-		for (var _k2 = _j2 + 1; _k2 < n; _k2++) {
-			total += matrix[_k2][_j2] * coefficients[_k2];
-		}
+                uPrime = reparameterize(bezCurve, points, uPrime);
 
-		coefficients[_j2] = (matrix[n][_j2] - total) / matrix[_j2][_j2];
-		}
+                var _generateAndReport2 = generateAndReport(points, u, uPrime, leftTangent, rightTangent, progressCallback);
 
-		return coefficients;
-	}
+                bezCurve = _generateAndReport2[0];
+                maxError = _generateAndReport2[1];
+                splitPoint = _generateAndReport2[2];
 
-	/**
-	* Round a number to a precision, specificed in number of decimal places
-	*
-	* @param {number} number - The number to round
-	* @param {number} precision - The number of decimal places to round to:
-	*                             > 0 means decimals, < 0 means powers of 10
-	*
-	*
-	* @return {numbr} - The number, rounded
-	*/
-	function round(number, precision) {
-		var factor = Math.pow(10, precision);
-		return Math.round(number * factor) / factor;
-	}
 
-	/**
-	* The set of all fitting methods
-	*
-	* @namespace
-	*/
-	var methods = {
-		linear: function linear(data, options) {
-		var sum = [0, 0, 0, 0, 0];
-		var len = 0;
+                if (maxError < error) {
+                    return [bezCurve];
+                }
+                //If the development of the fitted curve grinds to a halt,
+                //we abort this attempt (and try a shorter curve):
+                else if (splitPoint === prevSplit) {
+                        var errChange = maxError / prevErr;
+                        if (errChange > .9999 && errChange < 1.0001) {
+                            break;
+                        }
+                    }
 
-		for (var n = 0; n < data.length; n++) {
-			if (data[n][1] !== null) {
-			len++;
-			sum[0] += data[n][0];
-			sum[1] += data[n][1];
-			sum[2] += data[n][0] * data[n][0];
-			sum[3] += data[n][0] * data[n][1];
-			sum[4] += data[n][1] * data[n][1];
-			}
-		}
+                prevErr = maxError;
+                prevSplit = splitPoint;
+            }
+        }
 
-		var run = len * sum[2] - sum[0] * sum[0];
-		var rise = len * sum[3] - sum[0] * sum[1];
-		var gradient = run === 0 ? 0 : round(rise / run, options.precision);
-		var intercept = round(sum[1] / len - gradient * sum[0] / len, options.precision);
+        //Fitting failed -- split at max error point and fit recursively
+        beziers = [];
 
-		var predict = function predict(x) {
-			return [round(x, options.precision), round(gradient * x + intercept, options.precision)];
-		};
+        //To create a smooth transition from one curve segment to the next,
+        //we calculate the tangent of the points directly before and after the center,
+        //and use that same tangent both to and from the center point.
+        centerVector = maths.subtract(points[splitPoint - 1], points[splitPoint + 1]);
+        //However, should those two points be equal, the normal tangent calculation will fail.
+        //Instead, we calculate the tangent from that "double-point" to the center point, and rotate 90deg.
+        if (centerVector[0] === 0 && centerVector[1] === 0) {
+            //toCenterTangent = createTangent(points[splitPoint - 1], points[splitPoint]);
+            //fromCenterTangent = createTangent(points[splitPoint + 1], points[splitPoint]);
 
-		var points = data.map(function (point) {
-			return predict(point[0]);
-		});
+            //[x,y] -> [-y,x]: http://stackoverflow.com/a/4780141/1869660
+            centerVector = maths.subtract(points[splitPoint - 1], points[splitPoint]).reverse();
+            centerVector[0] = -centerVector[0];
+        }
+        toCenterTangent = maths.normalize(centerVector);
+        //To and from need to point in opposite directions:
+        fromCenterTangent = maths.mulItems(toCenterTangent, -1);
 
-		return {
-			points: points,
-			predict: predict,
-			equation: [gradient, intercept],
-			r2: round(determinationCoefficient(data, points), options.precision),
-			string: intercept === 0 ? 'y = ' + gradient + 'x' : 'y = ' + gradient + 'x + ' + intercept
-		};
-		},
-		exponential: function exponential(data, options) {
-		var sum = [0, 0, 0, 0, 0, 0];
+        /*
+        Note: An alternative to this "divide and conquer" recursion could be to always
+              let new curve segments start by trying to go all the way to the end,
+              instead of only to the end of the current subdivided polyline.
+              That might let many segments fit a few points more, reducing the number of total segments.
+                However, a few tests have shown that the segment reduction is insignificant
+              (240 pts, 100 err: 25 curves vs 27 curves. 140 pts, 100 err: 17 curves on both),
+              and the results take twice as many steps and milliseconds to finish,
+              without looking any better than what we already have.
+        */
+        beziers = beziers.concat(fitCubic(points.slice(0, splitPoint + 1), leftTangent, toCenterTangent, error, progressCallback));
+        beziers = beziers.concat(fitCubic(points.slice(splitPoint), fromCenterTangent, rightTangent, error, progressCallback));
+        return beziers;
+    };
 
-		for (var n = 0; n < data.length; n++) {
-			if (data[n][1] !== null) {
-			sum[0] += data[n][0];
-			sum[1] += data[n][1];
-			sum[2] += data[n][0] * data[n][0] * data[n][1];
-			sum[3] += data[n][1] * Math.log(data[n][1]);
-			sum[4] += data[n][0] * data[n][1] * Math.log(data[n][1]);
-			sum[5] += data[n][0] * data[n][1];
-			}
-		}
+    function generateAndReport(points, paramsOrig, paramsPrime, leftTangent, rightTangent, progressCallback) {
+        var bezCurve, maxError, splitPoint;
 
-		var denominator = sum[1] * sum[2] - sum[5] * sum[5];
-		var a = Math.exp((sum[2] * sum[3] - sum[5] * sum[4]) / denominator);
-		var b = (sum[1] * sum[4] - sum[5] * sum[3]) / denominator;
-		var coeffA = round(a, options.precision);
-		var coeffB = round(b, options.precision);
-		var predict = function predict(x) {
-			return [round(x, options.precision), round(coeffA * Math.exp(coeffB * x), options.precision)];
-		};
+        bezCurve = generateBezier(points, paramsPrime, leftTangent, rightTangent, progressCallback);
+        //Find max deviation of points to fitted curve.
+        //Here we always use the original parameters (from chordLengthParameterize()),
+        //because we need to compare the current curve to the actual source polyline,
+        //and not the currently iterated parameters which reparameterize() & generateBezier() use,
+        //as those have probably drifted far away and may no longer be in ascending order.
 
-		var points = data.map(function (point) {
-			return predict(point[0]);
-		});
+        var _computeMaxError = computeMaxError(points, bezCurve, paramsOrig);
 
-		return {
-			points: points,
-			predict: predict,
-			equation: [coeffA, coeffB],
-			string: 'y = ' + coeffA + 'e^(' + coeffB + 'x)',
-			r2: round(determinationCoefficient(data, points), options.precision)
-		};
-		},
-		logarithmic: function logarithmic(data, options) {
-		var sum = [0, 0, 0, 0];
-		var len = data.length;
+        maxError = _computeMaxError[0];
+        splitPoint = _computeMaxError[1];
 
-		for (var n = 0; n < len; n++) {
-			if (data[n][1] !== null) {
-			sum[0] += Math.log(data[n][0]);
-			sum[1] += data[n][1] * Math.log(data[n][0]);
-			sum[2] += data[n][1];
-			sum[3] += Math.pow(Math.log(data[n][0]), 2);
-			}
-		}
 
-		var a = (len * sum[1] - sum[2] * sum[0]) / (len * sum[3] - sum[0] * sum[0]);
-		var coeffB = round(a, options.precision);
-		var coeffA = round((sum[2] - coeffB * sum[0]) / len, options.precision);
+        if (progressCallback) {
+            progressCallback({
+                bez: bezCurve,
+                points: points,
+                params: paramsOrig,
+                maxErr: maxError,
+                maxPoint: splitPoint
+            });
+        }
 
-		var predict = function predict(x) {
-			return [round(x, options.precision), round(round(coeffA + coeffB * Math.log(x), options.precision), options.precision)];
-		};
+        return [bezCurve, maxError, splitPoint];
+    }
 
-		var points = data.map(function (point) {
-			return predict(point[0]);
-		});
+    /**
+     * Use least-squares method to find Bezier control points for region.
+     *
+     * @param {Array<Array<Number>>} points - Array of digitized points
+     * @param {Array<Number>} parameters - Parameter values for region
+     * @param {Array<Number>} leftTangent - Unit tangent vector at start point
+     * @param {Array<Number>} rightTangent - Unit tangent vector at end point
+     * @returns {Array<Array<Number>>} Approximated Bezier curve: [first-point, control-point-1, control-point-2, second-point] where points are [x, y]
+     */
+    function generateBezier(points, parameters, leftTangent, rightTangent) {
+        var bezCurve,
+            //Bezier curve ctl pts
+        A,
+            a,
+            //Precomputed rhs for eqn
+        C,
+            X,
+            //Matrices C & X
+        det_C0_C1,
+            det_C0_X,
+            det_X_C1,
+            //Determinants of matrices
+        alpha_l,
+            alpha_r,
+            //Alpha values, left and right
 
-		return {
-			points: points,
-			predict: predict,
-			equation: [coeffA, coeffB],
-			string: 'y = ' + coeffA + ' + ' + coeffB + ' ln(x)',
-			r2: round(determinationCoefficient(data, points), options.precision)
-		};
-		},
-		power: function power(data, options) {
-		var sum = [0, 0, 0, 0, 0];
-		var len = data.length;
+        epsilon,
+            segLength,
+            i,
+            len,
+            tmp,
+            u,
+            ux,
+            firstPoint = points[0],
+            lastPoint = points[points.length - 1];
 
-		for (var n = 0; n < len; n++) {
-			if (data[n][1] !== null) {
-			sum[0] += Math.log(data[n][0]);
-			sum[1] += Math.log(data[n][1]) * Math.log(data[n][0]);
-			sum[2] += Math.log(data[n][1]);
-			sum[3] += Math.pow(Math.log(data[n][0]), 2);
-			}
-		}
+        bezCurve = [firstPoint, null, null, lastPoint];
+        //console.log('gb', parameters.length);
 
-		var b = (len * sum[1] - sum[0] * sum[2]) / (len * sum[3] - Math.pow(sum[0], 2));
-		var a = (sum[2] - b * sum[0]) / len;
-		var coeffA = round(Math.exp(a), options.precision);
-		var coeffB = round(b, options.precision);
+        //Compute the A's
+        A = maths.zeros_Xx2x2(parameters.length);
+        for (i = 0, len = parameters.length; i < len; i++) {
+            u = parameters[i];
+            ux = 1 - u;
+            a = A[i];
 
-		var predict = function predict(x) {
-			return [round(x, options.precision), round(round(coeffA * Math.pow(x, coeffB), options.precision), options.precision)];
-		};
+            a[0] = maths.mulItems(leftTangent, 3 * u * (ux * ux));
+            a[1] = maths.mulItems(rightTangent, 3 * ux * (u * u));
+        }
 
-		var points = data.map(function (point) {
-			return predict(point[0]);
-		});
+        //Create the C and X matrices
+        C = [[0, 0], [0, 0]];
+        X = [0, 0];
+        for (i = 0, len = points.length; i < len; i++) {
+            u = parameters[i];
+            a = A[i];
 
-		return {
-			points: points,
-			predict: predict,
-			equation: [coeffA, coeffB],
-			string: 'y = ' + coeffA + 'x^' + coeffB,
-			r2: round(determinationCoefficient(data, points), options.precision)
-		};
-		},
-		polynomial: function polynomial(data, options) {
-		var lhs = [];
-		var rhs = [];
-		var a = 0;
-		var b = 0;
-		var len = data.length;
-		var k = options.order + 1;
+            C[0][0] += maths.dot(a[0], a[0]);
+            C[0][1] += maths.dot(a[0], a[1]);
+            C[1][0] += maths.dot(a[0], a[1]);
+            C[1][1] += maths.dot(a[1], a[1]);
 
-		for (var i = 0; i < k; i++) {
-			for (var l = 0; l < len; l++) {
-			if (data[l][1] !== null) {
-				a += Math.pow(data[l][0], i) * data[l][1];
-			}
-			}
+            tmp = maths.subtract(points[i], bezier.q([firstPoint, firstPoint, lastPoint, lastPoint], u));
 
-			lhs.push(a);
-			a = 0;
+            X[0] += maths.dot(a[0], tmp);
+            X[1] += maths.dot(a[1], tmp);
+        }
 
-			var c = [];
-			for (var j = 0; j < k; j++) {
-			for (var _l = 0; _l < len; _l++) {
-				if (data[_l][1] !== null) {
-				b += Math.pow(data[_l][0], i + j);
-				}
-			}
-			c.push(b);
-			b = 0;
-			}
-			rhs.push(c);
-		}
-		rhs.push(lhs);
+        //Compute the determinants of C and X
+        det_C0_C1 = C[0][0] * C[1][1] - C[1][0] * C[0][1];
+        det_C0_X = C[0][0] * X[1] - C[1][0] * X[0];
+        det_X_C1 = X[0] * C[1][1] - X[1] * C[0][1];
 
-		var coefficients = gaussianElimination(rhs, k).map(function (v) {
-			return round(v, options.precision);
-		});
+        //Finally, derive alpha values
+        alpha_l = det_C0_C1 === 0 ? 0 : det_X_C1 / det_C0_C1;
+        alpha_r = det_C0_C1 === 0 ? 0 : det_C0_X / det_C0_C1;
 
-		var predict = function predict(x) {
-			return [round(x, options.precision), round(coefficients.reduce(function (sum, coeff, power) {
-			return sum + coeff * Math.pow(x, power);
-			}, 0), options.precision)];
-		};
+        //If alpha negative, use the Wu/Barsky heuristic (see text).
+        //If alpha is 0, you get coincident control points that lead to
+        //divide by zero in any subsequent NewtonRaphsonRootFind() call.
+        segLength = maths.vectorLen(maths.subtract(firstPoint, lastPoint));
+        epsilon = 1.0e-6 * segLength;
+        if (alpha_l < epsilon || alpha_r < epsilon) {
+            //Fall back on standard (probably inaccurate) formula, and subdivide further if needed.
+            bezCurve[1] = maths.addArrays(firstPoint, maths.mulItems(leftTangent, segLength / 3.0));
+            bezCurve[2] = maths.addArrays(lastPoint, maths.mulItems(rightTangent, segLength / 3.0));
+        } else {
+            //First and last control points of the Bezier curve are
+            //positioned exactly at the first and last data points
+            //Control points 1 and 2 are positioned an alpha distance out
+            //on the tangent vectors, left and right, respectively
+            bezCurve[1] = maths.addArrays(firstPoint, maths.mulItems(leftTangent, alpha_l));
+            bezCurve[2] = maths.addArrays(lastPoint, maths.mulItems(rightTangent, alpha_r));
+        }
 
-		var points = data.map(function (point) {
-			return predict(point[0]);
-		});
+        return bezCurve;
+    };
 
-		var string = 'y = ';
-		for (var _i = coefficients.length - 1; _i >= 0; _i--) {
-			if (_i > 1) {
-			string += coefficients[_i] + 'x^' + _i + ' + ';
-			} else if (_i === 1) {
-			string += coefficients[_i] + 'x + ';
-			} else {
-			string += coefficients[_i];
-			}
-		}
+    /**
+     * Given set of points and their parameterization, try to find a better parameterization.
+     *
+     * @param {Array<Array<Number>>} bezier - Current fitted curve
+     * @param {Array<Array<Number>>} points - Array of digitized points
+     * @param {Array<Number>} parameters - Current parameter values
+     * @returns {Array<Number>} New parameter values
+     */
+    function reparameterize(bezier, points, parameters) {
+        /*
+        var j, len, point, results, u;
+        results = [];
+        for (j = 0, len = points.length; j < len; j++) {
+            point = points[j], u = parameters[j];
+              results.push(newtonRaphsonRootFind(bezier, point, u));
+        }
+        return results;
+        //*/
+        return parameters.map(function (p, i) {
+            return newtonRaphsonRootFind(bezier, points[i], p);
+        });
+    };
 
-		return {
-			string: string,
-			points: points,
-			predict: predict,
-			equation: [].concat(_toConsumableArray(coefficients)).reverse(),
-			r2: round(determinationCoefficient(data, points), options.precision)
-		};
-		}
-	};
+    /**
+     * Use Newton-Raphson iteration to find better root.
+     *
+     * @param {Array<Array<Number>>} bez - Current fitted curve
+     * @param {Array<Number>} point - Digitized point
+     * @param {Number} u - Parameter value for "P"
+     * @returns {Number} New u
+     */
+    function newtonRaphsonRootFind(bez, point, u) {
+        /*
+            Newton's root finding algorithm calculates f(x)=0 by reiterating
+            x_n+1 = x_n - f(x_n)/f'(x_n)
+            We are trying to find curve parameter u for some point p that minimizes
+            the distance from that point to the curve. Distance point to curve is d=q(u)-p.
+            At minimum distance the point is perpendicular to the curve.
+            We are solving
+            f = q(u)-p * q'(u) = 0
+            with
+            f' = q'(u) * q'(u) + q(u)-p * q''(u)
+            gives
+            u_n+1 = u_n - |q(u_n)-p * q'(u_n)| / |q'(u_n)**2 + q(u_n)-p * q''(u_n)|
+        */
 
-	function createWrapper() {
-		var reduce = function reduce(accumulator, name) {
-		return _extends({
-			_round: round
-		}, accumulator, _defineProperty({}, name, function (data, supplied) {
-			return methods[name](data, _extends({}, DEFAULT_OPTIONS, supplied));
-		}));
-		};
+        var d = maths.subtract(bezier.q(bez, u), point),
+            qprime = bezier.qprime(bez, u),
+            numerator = /*sum(*/maths.mulMatrix(d, qprime) /*)*/
+        ,
+            denominator = maths.sum(maths.addItems(maths.squareItems(qprime), maths.mulMatrix(d, bezier.qprimeprime(bez, u))));
 
-		return Object.keys(methods).reduce(reduce, {});
-	}
+        if (denominator === 0) {
+            return u;
+        } else {
+            return u - numerator / denominator;
+        }
+    };
 
-	regression = createWrapper();
-	}
-);
+    /**
+     * Assign parameter values to digitized points using relative distances between points.
+     *
+     * @param {Array<Array<Number>>} points - Array of digitized points
+     * @returns {Array<Number>} Parameter values
+     */
+    function chordLengthParameterize(points) {
+        var u = [],
+            currU,
+            prevU,
+            prevP;
 
-const result = regression.polynomial([[1, 1], [0, 0], [0.99, -1]]);
-console.log(result.string);
+        points.forEach(function (p, i) {
+            currU = i ? prevU + maths.vectorLen(maths.subtract(p, prevP)) : 0;
+            u.push(currU);
+
+            prevU = currU;
+            prevP = p;
+        });
+        u = u.map(function (x) {
+            return x / prevU;
+        });
+
+        return u;
+    };
+
+    /**
+     * Find the maximum squared distance of digitized points to fitted curve.
+     *
+     * @param {Array<Array<Number>>} points - Array of digitized points
+     * @param {Array<Array<Number>>} bez - Fitted curve
+     * @param {Array<Number>} parameters - Parameterization of points
+     * @returns {Array<Number>} Maximum error (squared) and point of max error
+     */
+    function computeMaxError(points, bez, parameters) {
+        var dist, //Current error
+        maxDist, //Maximum error
+        splitPoint, //Point of maximum error
+        v, //Vector from point to curve
+        i, count, point, t;
+
+        maxDist = 0;
+        splitPoint = points.length / 2;
+
+        var t_distMap = mapTtoRelativeDistances(bez, 10);
+
+        for (i = 0, count = points.length; i < count; i++) {
+            point = points[i];
+            //Find 't' for a point on the bez curve that's as close to 'point' as possible:
+            t = find_t(bez, parameters[i], t_distMap, 10);
+
+            v = maths.subtract(bezier.q(bez, t), point);
+            dist = v[0] * v[0] + v[1] * v[1];
+
+            if (dist > maxDist) {
+                maxDist = dist;
+                splitPoint = i;
+            }
+        }
+
+        return [maxDist, splitPoint];
+    };
+
+    //Sample 't's and map them to relative distances along the curve:
+    var mapTtoRelativeDistances = function mapTtoRelativeDistances(bez, B_parts) {
+        var B_t_curr;
+        var B_t_dist = [0];
+        var B_t_prev = bez[0];
+        var sumLen = 0;
+
+        for (var i = 1; i <= B_parts; i++) {
+            B_t_curr = bezier.q(bez, i / B_parts);
+
+            sumLen += maths.vectorLen(maths.subtract(B_t_curr, B_t_prev));
+
+            B_t_dist.push(sumLen);
+            B_t_prev = B_t_curr;
+        }
+
+        //Normalize B_length to the same interval as the parameter distances; 0 to 1:
+        B_t_dist = B_t_dist.map(function (x) {
+            return x / sumLen;
+        });
+        return B_t_dist;
+    };
+
+    function find_t(bez, param, t_distMap, B_parts) {
+        if (param < 0) {
+            return 0;
+        }
+        if (param > 1) {
+            return 1;
+        }
+
+        /*
+            'param' is a value between 0 and 1 telling us the relative position
+            of a point on the source polyline (linearly from the start (0) to the end (1)).
+            To see if a given curve - 'bez' - is a close approximation of the polyline,
+            we compare such a poly-point to the point on the curve that's the same
+            relative distance along the curve's length.
+              But finding that curve-point takes a little work:
+            There is a function "B(t)" to find points along a curve from the parametric parameter 't'
+            (also relative from 0 to 1: http://stackoverflow.com/a/32841764/1869660
+                                        http://pomax.github.io/bezierinfo/#explanation),
+            but 't' isn't linear by length (http://gamedev.stackexchange.com/questions/105230).
+              So, we sample some points along the curve using a handful of values for 't'.
+            Then, we calculate the length between those samples via plain euclidean distance;
+            B(t) concentrates the points around sharp turns, so this should give us a good-enough outline of the curve.
+            Thus, for a given relative distance ('param'), we can now find an upper and lower value
+            for the corresponding 't' by searching through those sampled distances.
+            Finally, we just use linear interpolation to find a better value for the exact 't'.
+              More info:
+                http://gamedev.stackexchange.com/questions/105230/points-evenly-spaced-along-a-bezier-curve
+                http://stackoverflow.com/questions/29438398/cheap-way-of-calculating-cubic-bezier-length
+                http://steve.hollasch.net/cgindex/curves/cbezarclen.html
+                https://github.com/retuxx/tinyspline
+        */
+        var lenMax, lenMin, tMax, tMin, t;
+
+        //Find the two t-s that the current param distance lies between,
+        //and then interpolate a somewhat accurate value for the exact t:
+        for (var i = 1; i <= B_parts; i++) {
+
+            if (param <= t_distMap[i]) {
+                tMin = (i - 1) / B_parts;
+                tMax = i / B_parts;
+                lenMin = t_distMap[i - 1];
+                lenMax = t_distMap[i];
+
+                t = (param - lenMin) / (lenMax - lenMin) * (tMax - tMin) + tMin;
+                break;
+            }
+        }
+        return t;
+    }
+
+    /**
+     * Creates a vector of length 1 which shows the direction from B to A
+     */
+    function createTangent(pointA, pointB) {
+        return maths.normalize(maths.subtract(pointA, pointB));
+    }
+
+    /*
+        Simplified versions of what we need from math.js
+        Optimized for our input, which is only numbers and 1x2 arrays (i.e. [x, y] coordinates).
+    */
+
+    var maths = function () {
+        function maths() {
+            _classCallCheck(this, maths);
+        }
+
+        maths.zeros_Xx2x2 = function zeros_Xx2x2(x) {
+            var zs = [];
+            while (x--) {
+                zs.push([0, 0]);
+            }
+            return zs;
+        };
+
+        maths.mulItems = function mulItems(items, multiplier) {
+            //return items.map(x => x*multiplier);
+            return [items[0] * multiplier, items[1] * multiplier];
+        };
+
+        maths.mulMatrix = function mulMatrix(m1, m2) {
+            //https://en.wikipedia.org/wiki/Matrix_multiplication#Matrix_product_.28two_matrices.29
+            //Simplified to only handle 1-dimensional matrices (i.e. arrays) of equal length:
+            //  return m1.reduce((sum,x1,i) => sum + (x1*m2[i]),
+            //                   0);
+            return m1[0] * m2[0] + m1[1] * m2[1];
+        };
+
+        maths.subtract = function subtract(arr1, arr2) {
+            //return arr1.map((x1, i) => x1 - arr2[i]);
+            return [arr1[0] - arr2[0], arr1[1] - arr2[1]];
+        };
+
+        maths.addArrays = function addArrays(arr1, arr2) {
+            //return arr1.map((x1, i) => x1 + arr2[i]);
+            return [arr1[0] + arr2[0], arr1[1] + arr2[1]];
+        };
+
+        maths.addItems = function addItems(items, addition) {
+            //return items.map(x => x+addition);
+            return [items[0] + addition, items[1] + addition];
+        };
+
+        maths.sum = function sum(items) {
+            return items.reduce(function (sum, x) {
+                return sum + x;
+            });
+        };
+
+        maths.dot = function dot(m1, m2) {
+            return maths.mulMatrix(m1, m2);
+        };
+
+        maths.vectorLen = function vectorLen(v) {
+            var a = v[0],
+                b = v[1];
+            return Math.sqrt(a * a + b * b);
+        };
+
+        maths.divItems = function divItems(items, divisor) {
+            //return items.map(x => x/divisor);
+            return [items[0] / divisor, items[1] / divisor];
+        };
+
+        maths.squareItems = function squareItems(items) {
+            //return items.map(x => x*x);
+            var a = items[0],
+                b = items[1];
+            return [a * a, b * b];
+        };
+
+        maths.normalize = function normalize(v) {
+            return this.divItems(v, this.vectorLen(v));
+        };
+
+        return maths;
+    }();
+
+    var bezier = function () {
+        function bezier() {
+            _classCallCheck(this, bezier);
+        }
+
+        bezier.q = function q(ctrlPoly, t) {
+            var tx = 1.0 - t;
+            var pA = maths.mulItems(ctrlPoly[0], tx * tx * tx),
+                pB = maths.mulItems(ctrlPoly[1], 3 * tx * tx * t),
+                pC = maths.mulItems(ctrlPoly[2], 3 * tx * t * t),
+                pD = maths.mulItems(ctrlPoly[3], t * t * t);
+            return maths.addArrays(maths.addArrays(pA, pB), maths.addArrays(pC, pD));
+        };
+
+        bezier.qprime = function qprime(ctrlPoly, t) {
+            var tx = 1.0 - t;
+            var pA = maths.mulItems(maths.subtract(ctrlPoly[1], ctrlPoly[0]), 3 * tx * tx),
+                pB = maths.mulItems(maths.subtract(ctrlPoly[2], ctrlPoly[1]), 6 * tx * t),
+                pC = maths.mulItems(maths.subtract(ctrlPoly[3], ctrlPoly[2]), 3 * t * t);
+            return maths.addArrays(maths.addArrays(pA, pB), pC);
+        };
+
+        bezier.qprimeprime = function qprimeprime(ctrlPoly, t) {
+            return maths.addArrays(maths.mulItems(maths.addArrays(maths.subtract(ctrlPoly[2], maths.mulItems(ctrlPoly[1], 2)), ctrlPoly[0]), 6 * (1.0 - t)), maths.mulItems(maths.addArrays(maths.subtract(ctrlPoly[3], maths.mulItems(ctrlPoly[2], 2)), ctrlPoly[1]), 6 * t));
+        };
+
+        return bezier;
+    }();
+
+   	fit = fitCurve;
+});
+
+//L equation: https://en.wikipedia.org/wiki/B%C3%A9zier_curve#Cubic_B.C3.A9zier_curves
+//L explanation: https://medium.freecodecamp.org/nerding-out-with-bezier-curves-6e3c0bc48e2f
+
+
 
 // constants
 const width = 1500;
@@ -525,6 +767,25 @@ function createCommonLine(l1, l2) {
 	];
 	return l3;
 }
+function fitPolyline(polyline, forgiveness) {
+	// convert point objects to point arrays
+	let pointArray = [];
+	polyline.forEach(point => {
+		pointArray.push([point.x, point.y]);
+	});
+
+	// do it	https://www.youtube.com/watch?v=BkIJsnLBA4c
+	let fittedCurve = fit(pointArray, forgiveness);
+
+	// convert point arrays back into objects
+	fittedCurve.forEach(curve => {
+		curve.forEach((point, i) => {
+			curve[i] = {x: point[0], y: point[1]};
+		});
+	});
+
+	return fittedCurve;
+}
 
 // math
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
@@ -550,6 +811,42 @@ function angleBetweenVectors(v1, v2) {
 	let m1 = getLength(v1);
 	let m2 = getLength(v2);
 	return Math.acos(dot / (m1 * m2));
+}
+function pointAlongCubic(points, t) {
+	// points[0&3] are the anchor points, points[1&2] are the control points
+	// t is how far along the curve the point is 0-1
+	// equation is a cubic curve
+
+	// clamp
+	if (t > 1) {
+		t = 1;
+	} else if (t < 0) {
+		t = 0;
+	}
+
+	// inverse
+	let ti = 1 - t;
+
+	// set default point
+	let p = {
+		x: points[0].x, 
+		y: points[0].y
+	};
+
+	// cubic function
+	p.x = 
+		1*Math.pow(ti, 3)*Math.pow(t, 0)*points[0].x + 
+		3*Math.pow(ti, 2)*Math.pow(t, 1)*points[1].x + 
+		3*Math.pow(ti, 1)*Math.pow(t, 2)*points[2].x + 
+		1*Math.pow(ti, 0)*Math.pow(t, 3)*points[3].x;
+
+	p.y = 
+		1*Math.pow(ti, 3)*Math.pow(t, 0)*points[0].y + 
+		3*Math.pow(ti, 2)*Math.pow(t, 1)*points[1].y + 
+		3*Math.pow(ti, 1)*Math.pow(t, 2)*points[2].y + 
+		1*Math.pow(ti, 0)*Math.pow(t, 3)*points[3].y;
+
+	return p;
 }
 
 // backwards conversion
@@ -625,6 +922,11 @@ function deleteFunction() {
 		lines[i].remove();
 	}
 
+	let paths = svg.getElementsByTagName('path');
+	for (let i = paths.length - 1; i >= 0; i--) {
+		paths[i].remove();
+	}
+
 	// clear storage
 	drawnPolylines = [];
 }
@@ -638,6 +940,15 @@ function drawLine([p1, p2]) {
 		x2: p2.x,
 		y2: p2.y,
 		class: 'lineA',
+	});
+	svg.appendChild(temp);
+	return temp;
+}
+function drawCubic([p1, p2, p3, p4]) {
+	let temp = document.createElementNS(ns, 'path');
+	setAttributesNS(temp, null, {
+		d: `M ${p1.x} ${p1.y} C ${p2.x} ${p2.y}, ${p3.x} ${p3.y}, ${p4.x} ${p4.y}`,
+		class: 'lineB',
 	});
 	svg.appendChild(temp);
 	return temp;
@@ -660,7 +971,7 @@ function getLocation(event){
 let mousePosition = {x: 0, y: 0};
 let hold = false;
 let drawInterval;
-let tickRate = 50;
+let tickRate = 10;
 
 // collection
 let drawnPolylines = [];
@@ -718,6 +1029,13 @@ function endLine(event) {
 		clearInterval(drawInterval);
 		endPolyline(tempPolyline, mousePosition);
 
+		//! temp draw fitted curve
+		let fittedCurve = fitPolyline(tempPolyline, 10);
+		fittedCurve.forEach(curve => {
+			drawCubic(curve);
+		});
+
+
 		// store polyline (as svg cant do this) and reset it
 		drawnPolylines.push(tempPolyline);
 		tempPolyline = [];
@@ -737,8 +1055,6 @@ svg.addEventListener('mousemove', event => {
 svg.addEventListener('mouseup', event => {
 	mousePosition = getLocation(event);
 	endLine(event);
-
-	console.log('Drawn Polylines: ', drawnPolylines);
 });
 
 svg.addEventListener('touchstart', event => {
@@ -751,3 +1067,8 @@ svg.addEventListener('touchmove', event => {
 svg.addEventListener('touchmove', event => {
 	endLine(event);
 });
+
+
+
+
+
