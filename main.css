@@ -4,7 +4,7 @@ html {
 }
 
 h1 {
-    font: normal normal 3vw Helvetica, sans-serif;
+    font: normal normal 4vw Helvetica, sans-serif;
     color: #f6e3e5;
     display: grid;
 
@@ -78,7 +78,7 @@ button:hover {
 	grid-column-start: 1;
   	grid-column-end: 3;
   	grid-row-start: 1;
-  	grid-row-end:1;
+  	grid-row-end:2;
   	padding: 1vw;
 }
 
@@ -93,16 +93,16 @@ button:hover {
 #grid-cleanButton {
 	grid-column-start: 1;
   	grid-column-end: 1;
-  	grid-row-start: 4;
-  	grid-row-end:4;
+  	grid-row-start: 3;
+  	grid-row-end:3;
   	padding: 1vw;
 }
 
 #grid-deleteButton {
 	grid-column-start: 1;
   	grid-column-end: 1;
-  	grid-row-start: 5;
-  	grid-row-end:6 ;
+  	grid-row-start: 4;
+  	grid-row-end: 4;
   	padding: 1vw;
 }
 
@@ -138,6 +138,14 @@ button:hover {
   	padding: 1vw;
 }
 
+#drawingSpace {
+	grid-column-start: 2;
+  	grid-column-end: 7;
+  	grid-row-start: 3;
+  	grid-row-end: 7;
+  	padding: 1vw;
+}
+
 /* script */
 .lineA {
     stroke: #f6e3e5;
@@ -158,7 +166,7 @@ button:hover {
 
 .fillA {
 	stroke: none;
-	fill: rgb(0, 255, 0);
+	fill: #a0caec;
 }
 
 

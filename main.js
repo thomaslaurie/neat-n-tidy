@@ -632,10 +632,9 @@ let fit;
 //L explanation: https://medium.freecodecamp.org/nerding-out-with-bezier-curves-6e3c0bc48e2f
 
 
-
 // constants
-const width = 1500;
-const height = 500;
+const width = document.getElementById('drawingSpace').offsetWidth;
+const height = document.getElementById('drawingSpace').offsetHeight;
 
 // util
 function setAttributes(element, attributes) {
@@ -659,7 +658,7 @@ setAttributesNS(svg, null, { // attributes inherit namespace of tag, but themsel
   height: height,
 });
 //document.getElementById("grid-drawing").appendChild(svg);
-document.body.appendChild(svg);
+document.getElementById('drawingSpace').appendChild(svg);
 
 // border
 let b = document.createElementNS(ns, 'rect');
@@ -672,6 +671,25 @@ setAttributesNS(b, null, {
 });
 svg.appendChild(b);
 
+// slider
+let pointsSlider = document.getElementById('myRange1');
+let distanceSlider = document.getElementById('myRange2');
+let angleSlider = document.getElementById('myRange3');
+
+pointsSlider.addEventListener('change', function() {
+	showPoints = pointsSlider.value > 0.5;
+});
+distanceSlider.addEventListener('change', function() {
+	distanceThreshold = distanceSlider.value;
+});
+angleSlider.addEventListener('change', function() {
+	angularCompatibilityThreshold = angleSlider.value;
+});
+
+let showPoints = false;
+let distributedPointsDivisions = 10;
+let distanceThreshold = 100; // this is the big thing keeping it from working well - parallel but end-to-end lines are technically far apart which isnt right
+let angularCompatibilityThreshold = 0.5;
 
 /* controller example
 	let c = document.createElementNS(ns, 'circle');
@@ -929,7 +947,7 @@ function coarseMerge(polylines) {
 
 			for (let j = i-1; j > -1; j--) {
 				// then iterate over all other ungrouped polylines, and if they satisfy the thresholds
-				if (angularCompatibility(groups[i][0], instance[j]) < angularCompatibilityThreshold && distanceBetweenPolylines(groups[i][0], instance[j]) < distanceThreshold) {
+				if (angularCompatibility(groups[i][0], instance[j]) < angularCompatibilityThreshold && distanceBetweenPolylines(groups[i][0], instance[j], distributedPointsDivisions) < distanceThreshold) {
 					// group them with that group
 					
 					groups[i].push(instance[j].slice(0));
@@ -942,7 +960,7 @@ function coarseMerge(polylines) {
 	let newPolylines = [];
 	groups.forEach(item => {
 		if (Array.isArray(item)) {
-			newPolylines.push(createCommonPolyline(item, 50));
+			newPolylines.push(createCommonPolyline(item, distributedPointsDivisions));
 		}
 	});
 
@@ -952,9 +970,6 @@ function coarseMerge(polylines) {
 // math
 const fitForgiveness = 5;
 const estimateDivisions = 10;
-
-const angularCompatibilityThreshold = 0.5;
-const distanceThreshold = 100; // this is the big thing keeping it from working well - parallel but end-to-end lines are technically far apart which isnt right
 
 function getDistance({x: x1, y: y1}, {x: x2, y: y2}) {
 	// length between two points
@@ -1162,12 +1177,14 @@ function cleanFunction() {
 
 	drawnPolylines.forEach((polyline, i) => {
 		let fittedCurve = fitPolyline(polyline, 10);
-		drawFittedCurve(fittedCurve, 'lineA');
 
-		/* create distributed points
-			let distributedPoints = getDistributedPoints(fittedCurve, 100);
+		if (showPoints) {
+			// create distributed points
+			let distributedPoints = getDistributedPoints(fittedCurve, distributedPointsDivisions);
 			drawDistributedPoints(distributedPoints, 'fillA');
-		*/
+		} else {
+			drawFittedCurve(fittedCurve, 'lineA');
+		}
 	});
 
 	
@@ -1175,6 +1192,11 @@ function cleanFunction() {
 	aggregatedPolylines.forEach(polyline => {
 		let fittedCurve = fitPolyline(polyline, 10);
 		drawFittedCurve(fittedCurve, 'lineB');
+
+		if (showPoints) {
+			let distributedPoints = getDistributedPoints(fittedCurve, distributedPointsDivisions);
+			drawDistributedPoints(distributedPoints, 'fillA');
+		}
 	});
 	
 
@@ -1247,7 +1269,7 @@ function drawDot(p, style) {
 	setAttributesNS(temp, null, {
 		cx: p.x,
 		cy: p.y,
-		r: 10,
+		r: 4,
 		class: style,
 	});
 	svg.appendChild(temp);

@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8">
 		<link rel="stylesheet" href="main.css">
-		<title>Stroke Aggregator</title>
+		<title>Neat n Tidy</title>
 	</head>
 
 	<body>
@@ -12,14 +12,10 @@
 
 			<div id="grid-title">
 				<!-- Heading -->
-				<h1>Stroke Aggregator</h1>
+				<h1>Neat n Tidy</h1>
 			</div>
 
 			<div id="grid-startButton">
-				<!--Start Button-->
-				<!--Currently, this button creates the random strokes
-					in the future, it will allow users to draw strokes-->
-				<button id="generate" onclick="generateFunction()">Generate</button>	
 			</div>
 
 			<div id="grid-cleanButton">
@@ -36,24 +32,21 @@
 			</div>
 
 			<div id="grid-slidecontainer1">
-				<h2>Some sort of Setting</h2>
- 				 <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+				<h2>Toggle Points</h2>
+ 				 <input type="range" min="0" max="1" value="0" class="slider" id="myRange1">
 			</div>
 
 			<div id="grid-slidecontainer2">
-				<h2>Some sort of Setting</h2>
- 				 <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+				<h2>Distance Threshold</h2>
+ 				 <input type="range" min="0" max="1000" value="100" class="slider" id="myRange2">
 			</div>
 
 			<div id="grid-slidecontainer3">
-				<h2>Some sort of Setting</h2>
- 				 <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+				<h2>Angle Threshold</h2>
+ 				 <input type="range" min="0" max="6.3" value="0.5" class="slider" id="myRange3">
 			</div>
 
-			<div id="grid-slidecontainer4">
-				<h2>Some Sort of Setting</h2>
- 				 <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
-			</div>
+			<div id="drawingSpace"></div>
 
 		</div>
 	</body>
