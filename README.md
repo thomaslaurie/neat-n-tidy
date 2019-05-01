@@ -1,4 +1,3 @@
-# neat n tidy
+# Neat n Tidy
 
-demo at: 
-https://www.tlaurie.com/neat-n-tidy
+demo: https://www.tlaurie.com/neat-n-tidy
